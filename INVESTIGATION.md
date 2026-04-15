@@ -78,5 +78,23 @@ Sequence: prior Boilerplate uninstalled → loadApp invoked with `--path "44'/0'
 ## Pins recorded for reproducibility
 
 - `LedgerHQ/app-boilerplate` @ `ac10944e8bfed3d1e57af9a856dd6ab716a74a1b`
-- `LedgerHQ/ledger-app-workflows` @ `2ddae7bf080353584b77bd1356c8909c5b8f8257`
+- `LedgerHQ/ledger-app-workflows` @ `2ddae7bf080353584b77bd1356c8909c5b8f8257` (still pinned for `guidelines_enforcer.yml` only)
 - `ghcr.io/ledgerhq/ledger-app-builder/ledger-app-builder-lite` @ `sha256:b82bfff7862d890ea0c931f310ed1e9bce6efe2fac32986a2561aaa08bfc2834` (multi-arch index, resolved 2026-04-15)
+
+## Phase 0 bootstrap — CI green
+
+- Fork: [`Zyrtnin-org/app-radiant`](https://github.com/Zyrtnin-org/app-radiant) (from `LedgerHQ/app-bitcoin`)
+- Fork: [`Zyrtnin-org/lib-app-bitcoin`](https://github.com/Zyrtnin-org/lib-app-bitcoin) (from `LedgerHQ/lib-app-bitcoin`)
+- Submodule URL updated to point at our fork
+- Tag: `v0.0.2-bootstrap` at commit `47125ea`
+- First green CI: [run 24443131113](https://github.com/Zyrtnin-org/app-radiant/actions/runs/24443131113) (49s, COIN=bitcoin_cash)
+- Artifact SHA256:
+  - `bin/app.hex`: `cad2edf89307ca53de675ec14cc3bea8968f1357fa0cd3e8b7049c3ad40f117d`
+  - `bin/app.elf`: `e9221f220eb710518ab310cba8b87d23187bfd60d711271e267856fbbf416f9d`
+- `app.elf` verified as 32-bit ARM EABI5 ELF — correct target for the secure element
+
+### CI deviation from the plan
+
+The plan said "use `LedgerHQ/ledger-app-workflows` reusable workflow." We tried `@v1` and `@SHA` forms — both failed with `startup_failure` in a non-debuggable way on this fork. Replaced the build job with a direct workflow that pulls `ledger-app-builder-lite` by pinned digest. The guidelines_enforcer still uses the reusable workflow (pinned by SHA) because it's an app-quality gate, not the build step.
+
+Unexpected upside: the direct workflow lets us pin the **builder image digest**, which the reusable workflow hardcodes to `:latest`. So reproducibility discipline is stronger than the original plan specified.

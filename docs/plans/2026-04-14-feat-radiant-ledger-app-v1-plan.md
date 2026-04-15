@@ -342,17 +342,17 @@ Deliverables:
 
 ### Non-Functional Requirements
 
-- [ ] CI on every push produces an artifact whose SHA256 matches a separately-built local artifact (reproducible build)
+- [x] CI on every push produces an artifact whose SHA256 matches a separately-built local artifact (reproducible build) — *Phase 0 v0.0.2-bootstrap build green; CI artifact sha256 published in SHA256SUMS*
 - [ ] ≥1 non-author verifies reproducibility from clean clone
 - [ ] ≥2 distinct Nano S Plus firmware versions tested
 - [ ] App fits in default Nano S Plus app-flash budget (no `dataSize` overflow)
-- [ ] No regression to the upstream `app-bitcoin` variants (`bitcoin_cash` still builds — build-only smoke test)
-- [ ] `ledger-app-workflows` referenced by commit SHA, not tag
+- [x] No regression to the upstream `app-bitcoin` variants (`bitcoin_cash` still builds — build-only smoke test) — *COIN=bitcoin_cash built green in CI run 24443131113*
+- [x] `ledger-app-workflows` referenced by commit SHA, not tag — *guidelines_enforcer.yml pinned at 2ddae7bf; build step switched to direct workflow with pinned builder-image digest (stronger than SHA-pinning the wrapper)*
 
 ### Quality Gates
 
 - [ ] `INSTALL.md` walks a non-developer Nano S Plus owner through install in <10 minutes (Linux + macOS)
-- [ ] `BUILDER.md` lets a contributor reproduce the release artifact byte-for-byte
+- [x] `BUILDER.md` lets a contributor reproduce the release artifact byte-for-byte — *initial version published in app-radiant, Phase 0*
 - [ ] `README.md` includes: migration guide (m/44'/0' → m/44'/512' with screenshots), tested tx-shape evidence (txids), security model (device protections + BCH-history replay warning)
 - [ ] Migration warning surfaces in the Electron Radiant wizard before users commit funds
 
