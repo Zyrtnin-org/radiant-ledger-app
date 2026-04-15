@@ -124,12 +124,87 @@ Smoke tests (no RXD required):
   - hardware Radiant acc 0: `m/44'/512'/0'`
   - hardware Radiant acc 1: `m/44'/512'/1'`
 
-Outstanding for Phase 1 finish line:
-- Install Electron-Wallet deps locally to run `./electron-radiant` (Qt, ecdsa, etc.) — or defer to the user's existing env
-- User funds `1LkYcHBgsNMvtYfySeZPh29fPrJaVFhMRc` with a small RXD amount
-- Create wallet in Electron Radiant via "Use a hardware device" wizard → should land at `m/44'/512'/0'`
-- Sign + broadcast a 1-in/1-out send
-- Verify mainnet acceptance
+## Phase 1 end-to-end hardware test (2026-04-15, continued)
+
+### ✅ Everything before the signing step works
+
+- Electron-Wallet setup in a venv (Qt, ecdsa, btchip). **Workaround needed**: btchip-python's setup.py is incompatible with modern setuptools (`extras_require` format error). Cloned `LedgerHQ/btchip-python` master and dropped the `btchip/` module directly into `venv/lib/python3.12/site-packages/`. This is OK for a dev session (same code pip would install, device screen is the trust anchor) but NOT a shipping strategy — need an upstream fix or vendoring as a v1 release prerequisite.
+- Additional plugin fix: `DEVICE_IDS` list in `electroncash_plugins/ledger/ledger.py` was missing `(0x2c97, 0x5000)`. Nano S Plus keeps PID 0x5000 in many app-open configurations. Added the tuple. This is the piece the closed PR #1 had right from the start — detection-only, not a replacement for the signing work.
+- Wizard flow: detected the device after the PID fix, showed **`m/44'/512'/0'`** as the derivation default (our `bip44_derivation(0, coin_type=512)` change in action), requested xpub from device, created the wallet.
+- Wallet opens with `radiant-ledger-test [standard]` title, green Electrum connection.
+- **1 RXD funded at `1LkYcHBgsNMvtYfySeZPh29fPrJaVFhMRc`** from a source wallet (txid `3521c21125f9bdf0039bec54946ca7c911f4d38c23aef1786a85e9d98f6a8556`).
+- Balance correctly discovered from the xpub the device produced.
+
+### ❌ Sign + broadcast failed — major finding
+
+Attempted a 1-in/2-out spend (0.5 RXD back to source wallet `16nqCDuBCQEcgRUZ3DCigtq18gfjEWUuyS`, change to our Ledger wallet). Electron Radiant built the tx, Ledger signed it, tx was broadcast — **Radiant node rejected with "script execution error."**
+
+**Root cause:** Radiant's signature preimage is NOT byte-identical to BCH's. Original research assumption was wrong.
+
+Radiant's preimage (from [`radiant-node/src/script/interpreter.cpp:2636-2650`](https://github.com/RadiantBlockchain/radiant-node/blob/master/src/script/interpreter.cpp#L2636)):
+
+```
+ss << nVersion
+ss << hashPrevouts
+ss << hashSequence
+ss << prevout
+ss << scriptCode
+ss << amount
+ss << nSequence
+ss << hashOutputHashes   ← NEW FIELD Radiant adds; not in BCH BIP143
+ss << hashOutputs        ← standard BCH field
+ss << nLockTime
+ss << sigHashType
+```
+
+The sighash **type byte** (`SIGHASH_ALL|FORKID = 0x41`) is identical to BCH — which is what the original research found. But the preimage **construction** differs: Radiant inserts `hashOutputHashes` between `nSequence` and `hashOutputs`, and this field is in the preimage for **every** Radiant tx (including plain P2PKH — it carries zero-ref summaries when no Glyph push-refs are present).
+
+Our Ledger app uses the stock BCH preimage code (inherited from `lib-app-bitcoin`), which doesn't compute or emit `hashOutputHashes`. So the device signs one preimage and the network verifies against a different one. OP_CHECKSIG fails.
+
+### `hashOutputHashes` algorithm
+
+Per-output summary (from [`radiant-node/src/primitives/transaction.h:475-492, 532-540`](https://github.com/RadiantBlockchain/radiant-node/blob/master/src/primitives/transaction.h#L475)):
+
+```
+<nValue: 8 bytes LE>
+<sha256(scriptPubKey): 32 bytes>
+<totalRefs: 4 bytes LE>            (= 0 for plain P2PKH)
+<refsHash: 32 bytes>               (= sha256(concatenated push-refs) or 32 zero bytes for no-refs)
+```
+
+All per-output summaries concatenated, then double-SHA256'd → `hashOutputHashes`.
+
+For v1 plain P2PKH scope: `totalRefs=0` and `refsHash=0x00...00` for every output. Per-output summary is a deterministic 76 bytes.
+
+### Walking-skeleton strategy vindicated
+
+Discovery cost: 1 RXD value at risk, ~hours of iterative debugging. Had we shipped the plan as originally scoped, users would hit "script execution error" on their first send — after trusting us.
+
+### Plan impact
+
+Current plan assumed the C diff is ~58 lines. With `hashOutputHashes` the real scope is likely **150-300 lines** across:
+- `handler/hash_input_start.c` — initialize a parallel hasher for `hashOutputHashes` (Radiant-only)
+- `handler/hash_input_finalize_full.c` — for each output, compute `sha256(scriptPubKey)` + emit the 4-field summary into the parallel hasher
+- `context.h` / `context.c` — store finalized `hashOutputHashes` on the context struct
+- `handler/hash_sign.c` — insert `hashOutputHashes` into the preimage before `hashOutputs` when `COIN_KIND == COIN_KIND_RADIANT`
+- Push-ref scanning scaffolding (for v2 bridge; v1 short-circuits to zero)
+
+### Status check
+
+| Step | Status |
+|---|---|
+| C diff (enum + gate extension + path-lock helper) | ✅ done |
+| Makefile + icons + CI matrix (local↔CI reproducible) | ✅ done |
+| Sideload + address derivation + path-lock defense | ✅ done |
+| Plugin (Electron-Wallet branch `radiant-ledger-512`) | ✅ done |
+| Wallet creation + balance discovery | ✅ done |
+| **Sign preimage includes `hashOutputHashes`** | ❌ **not done — root cause of broadcast rejection** |
+
+### Next step
+
+Run `/workflows:brainstorm` focused on: "How do we properly extend our Radiant Ledger app's preimage to include `hashOutputHashes` without introducing new attack surface, and what else about Radiant's signature/script semantics might differ from BCH?" Then `/workflows:plan` against the finding.
+
+User's 1 RXD is safe at the Ledger address until the fix ships. No rush.
 
 ---
 

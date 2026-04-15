@@ -2,9 +2,20 @@
 title: "feat: Radiant Ledger App v1 (RXD signing on Nano S Plus)"
 type: feat
 date: 2026-04-14
+last_revision: 2026-04-15
 ---
 
 # Radiant Ledger App v1 — Implementation Plan
+
+> ## ⚠️ Scope revision — 2026-04-15
+>
+> Phase 1 hardware testing discovered that Radiant's signature preimage is NOT byte-identical to BCH, contradicting the original research assumption. Radiant inserts a new `hashOutputHashes` field into the preimage between `nSequence` and `hashOutputs` (see [`radiant-node/src/script/interpreter.cpp:2636-2650`](https://github.com/RadiantBlockchain/radiant-node/blob/master/src/script/interpreter.cpp#L2636)). This field is present for **every** Radiant tx, including plain P2PKH, carrying zero-ref summaries when no Glyph push-refs are present.
+>
+> The C diff originally scoped at ~58 lines is sufficient for address derivation and path-lock defense (both verified working on real hardware), but insufficient for signing — Radiant's node rejects our BCH-preimage signatures with "script execution error."
+>
+> **Real v1 scope now includes**: on-device `hashOutputHashes` computation (~150-300 additional C lines across `hash_input_start.c`, `hash_input_finalize_full.c`, `hash_sign.c`, and `context.{h,c}`). Full details in [`INVESTIGATION.md`](../../INVESTIGATION.md#phase-1-end-to-end-hardware-test-2026-04-15-continued).
+>
+> Walking-skeleton strategy caught this at ~1 RXD cost, before shipping. Remediation will be scoped via a new `/workflows:brainstorm` pass and a v1-revision plan.
 
 ## Overview
 
