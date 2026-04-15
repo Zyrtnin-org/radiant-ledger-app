@@ -361,8 +361,13 @@ Per SpecFlow finding #8: fill the gap between oracle existing and C implementati
 
 **Deliverables:**
 
-- `scripts/fixtures/preimage-vectors.json` with 4 test vectors
-- `scripts/test-oracle-against-vectors.py` passes all 4
+- [x] `scripts/fixtures/preimage-vectors.json` with 4 test vectors covering all target shapes — **2026-04-15: built via `build_fixtures.py`**:
+  - `sweep_1in_1out` (txid `48bcbdef…`) — 1 input verified
+  - `standard_1in_2out` (txid `3521c21…` our funding tx) — 1 input verified
+  - `multi_3in_2out` (txid `266fdbec…`) — 3 inputs verified
+  - `consolidation_11in_1out` (txid `b4debc15…`) — 11 inputs verified
+  - **Total: 16 oracle-computed sighashes, every one verified against published mainnet signatures**
+- [x] `scripts/test_oracle_against_vectors.py` passes all 4 vectors — 16/16 input sighashes re-verify against the oracle and against published sigs. Exit 0.
 
 ---
 

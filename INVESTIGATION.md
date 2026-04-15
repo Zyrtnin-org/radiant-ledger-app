@@ -269,6 +269,29 @@ Deferred: `FlipperHub blockchain_rpc.php` cross-check via SSH (originally plan'd
 
 ---
 
+## Phase 1.5.2 — Golden test vectors (2026-04-15)
+
+**Fixtures:** [`scripts/fixtures/preimage-vectors.json`](scripts/fixtures/preimage-vectors.json)
+**Builder:** [`scripts/build_fixtures.py`](scripts/build_fixtures.py) — runs once per oracle change
+**Self-test:** [`scripts/test_oracle_against_vectors.py`](scripts/test_oracle_against_vectors.py) — exit 0 means fixtures align with current oracle
+
+Four target tx shapes, all sourced from real mainnet-confirmed RXD transactions. Each fixture includes: signed tx hex, unsigned tx hex, per-input prevout data, oracle-computed expected sighash, and the published signature (for re-verification). Build-time validation: every sighash verified against the published signature via `ecdsa.VerifyingKey.verify_digest`.
+
+| Name | Shape | Txid | Inputs verified |
+|---|---|---|---|
+| `sweep_1in_1out` | 1-in / 1-out (sweep, no change) | `48bcbdef…` | 1/1 |
+| `standard_1in_2out` | 1-in / 2-out (with change) | `3521c21…` (our funding tx) | 1/1 |
+| `multi_3in_2out` | 3-in / 2-out (multi-input) | `266fdbec…` | 3/3 |
+| `consolidation_11in_1out` | 11-in / 1-out (per-output-hasher lifecycle stress) | `b4debc15…` | 11/11 |
+
+**Total: 16 sighashes, 100% verified against published mainnet signatures.**
+
+These fixtures drive Phase 1.5.4's device-compare harness: host sends the unsigned tx + per-input prevout data to the device, captures the device's DER signature, verifies that signature against `(expected_sighash, device_pubkey_at_m_44_512_0_0_0)`. If verify passes, device and oracle agree on preimage.
+
+Note on device-vs-published-pubkey: the fixtures' `published_pubkey_hex` is documentary — it's the original signer's pubkey, different from our Ledger's. At compare-harness time we'll verify the device's signature against the device's own pubkey (queried via GetWalletPublicKey APDU) + the oracle-computed sighash. The oracle sighash depends only on tx-structure + prevout-data, not on who owns the UTXO, so this works cleanly.
+
+---
+
 ## Pins recorded for reproducibility
 
 - `LedgerHQ/app-boilerplate` @ `ac10944e8bfed3d1e57af9a856dd6ab716a74a1b`
