@@ -328,9 +328,12 @@ Per SpecFlow finding #7: validate the oracle three ways before trusting it, not 
 
 **Deliverables:**
 
-- `scripts/radiant-preimage-oracle.py` with unit-test-level doctests for each helper (`varint_encode`, `sha256d`, `per_output_summary`, `get_hash_output_hashes`, `build_preimage`, `sighash_for_input`)
-- `scripts/oracle-self-validate.py` executes all three checks and exits 0 only if all pass
-- `scripts/fixtures/` with: 1 mainnet tx's unsigned hex + prevout data + expected sighash + on-chain signature (triple-check data source)
+- [x] `scripts/radiant_preimage_oracle.py` with doctest-style self-test for encoding/hash helpers
+- [x] `scripts/oracle_self_validate.py` executes all three checks and exits 0 only if all pass — **2026-04-15: PASS (exit 0)**
+- [x] Check A: mainnet tx `3521c21…` input 0 → oracle sighash `c8554a48…` verifies against published signature
+- [x] Check B.1: P2PKH hand-computed preimage byte-matches oracle (214B; sighash `f76d55ea…`)
+- [x] Check B.2: OP_RETURN + P2PKH hand-computed preimage byte-matches oracle (closes Security H1; sighash `a63585c1…`)
+- [x] Check C: mainnet tx `841c66a…` (100-in, different signer) — 4/4 sampled inputs verify against oracle
 
 **Why first:** prevents another sign-then-reject mainnet iteration. If the oracle is wrong, we find out without costing RXD.
 

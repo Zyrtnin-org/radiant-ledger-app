@@ -224,6 +224,51 @@ All 5 checks green. Proceed to Phase 1.5.1.
 
 ---
 
+## Phase 1.5.1 — Python oracle + triple self-validation (2026-04-15)
+
+**Oracle:** [`scripts/radiant_preimage_oracle.py`](scripts/radiant_preimage_oracle.py) — Python port of `radiantjs/lib/transaction/sighash.js:91-237`. Pure stdlib + `ecdsa`. Pure functions.
+
+**Self-validator:** [`scripts/oracle_self_validate.py`](scripts/oracle_self_validate.py) — runs all 3 checks, exits 0 only on all-green.
+
+**Run:** `python3 scripts/oracle_self_validate.py` → PASS on 2026-04-15 (exit 0).
+
+### Check A — known mainnet tx signature verification
+
+- Tx: `3521c21125f9bdf0039bec54946ca7c911f4d38c23aef1786a85e9d98f6a8556` (our funding tx)
+- Oracle-computed sighash for input 0: `c8554a48c5ff2bc404b1a16eaaa58bfaee6b992829cf963b2278687654e515d3`
+- Published signature verifies against that sighash + published pubkey via `ecdsa.VerifyingKey.verify_digest`
+- **Result:** PASS — oracle produces the same digest the signing node signed against.
+
+### Check B.1 — hand-computed P2PKH preimage byte-diff
+
+- Synthetic 1-in/1-out P2PKH tx, construction documented inline in `_manual_preimage_p2pkh()`
+- Expected preimage hand-derived from spec (sha256d per-field, concat order, widths)
+- Oracle-computed preimage **byte-identical** (214 bytes)
+- Sighash: `f76d55eac5c91b5f289702037d92948b184dfbce770c1e57ff08ea8dfa68d1d1`
+- **Result:** PASS — oracle matches hand-derivation from spec.
+
+### Check B.2 — hand-computed OP_RETURN + P2PKH preimage byte-diff (closes Security H1)
+
+- Synthetic 1-in/2-out tx: output 0 is `OP_RETURN <10 bytes>` (12B script), output 1 is standard P2PKH (25B script)
+- Exercises the **varying-script-length path** in the per-output summary hasher — the monoculture gap Security H1 flagged
+- Oracle-computed preimage **byte-identical** (214 bytes) to hand-derivation
+- Sighash: `a63585c138965b399e6de785d6470d3099218d8de2270e8303647a7be0c99df3`
+- **Result:** PASS — H1 closed.
+
+### Check C — second mainnet tx independent-signer verification
+
+- Tx: `841c66ac8f8639a65b1d7e004b3d87b2247e6dc050d73dd01a1e794ece4b48e3` (100-in/2-out consolidation by a different wallet)
+- Sampled inputs 0, 1, 50, 99 — each signature verifies against oracle's sighash for that input
+- **Result:** 4/4 PASS — oracle is not coupled to any single implementation quirk; produces correct digests across different signers and tx shapes.
+
+### Combined confidence
+
+Triple-check with two independent mainnet txs + two hand-derivations across two output-shape classes. Oracle is trusted as ground truth for Phase 1.5.4 device-compare harness.
+
+Deferred: `FlipperHub blockchain_rpc.php` cross-check via SSH (originally plan'd as Check C) — made redundant by the stronger upgraded Check C against a truly different signer. Documented for completeness but not run.
+
+---
+
 ## Pins recorded for reproducibility
 
 - `LedgerHQ/app-boilerplate` @ `ac10944e8bfed3d1e57af9a856dd6ab716a74a1b`
