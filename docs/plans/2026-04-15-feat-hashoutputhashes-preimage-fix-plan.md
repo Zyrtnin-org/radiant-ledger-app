@@ -232,33 +232,41 @@ Per SpecFlow findings #4, #6: mid-stream interrupt, user reject, power loss. Ext
 ```c
 void hash_input_finalize_full_reset(void) {
   context.currentOutputOffset = 0;
-  context.outputParsingState = OUTPUT_PARSING_NUMBER_OUTPUTS;
+  context.outputParsingState = OUTPUT_PARSING_NUMBER_OUTPUTS;  // always reset
   memset(context.totalOutputAmount, 0, sizeof(context.totalOutputAmount));
   context.changeOutputFound = 0;
-  // NEW for Radiant:
+  // NEW for Radiant — Security H2: reset ALL new state fields unconditionally,
+  // including currentOutputScriptCtx (re-init it here, not only when entering
+  // PARSING_SCRIPT). A cancel during PARSING_SCRIPT leaves the ctx in a
+  // half-consumed state otherwise, and the next sign could read stale state.
   if (COIN_KIND == COIN_KIND_RADIANT) {
     cx_sha256_init_no_throw(&context.hashOutputHashesCtx);
+    cx_sha256_init_no_throw(&context.currentOutputScriptCtx);
     context.currentOutputBytesRemaining = 0;
     context.currentOutputSatoshis = 0;
-    // currentOutputScriptCtx gets re-init'd per-output; no teardown needed here
   }
 }
 ```
 
-Also trace the cancel path in the UI confirmation flow — ensure the reset function is called there too. Research agent noted "audit the cancel path explicitly."
+**Cancel-path audit task** (Phase 1.5.3 step 6): trace every `return` or `goto` in `hash_input_finalize_full.c` that could exit mid-output-stream (error returns, user-reject via UI confirm flow, USB disconnect). Confirm each either calls `hash_input_finalize_full_reset()` or cannot reach the next `hash_input_start` without reset being called somewhere else in the state machine. Document findings inline in the C diff's commit message.
 
-#### 6. Runtime assertion on COIN_KIND gating
+#### 6. Runtime assertion on COIN_KIND gating (scoped)
 
-Per SpecFlow finding #5: add a runtime assertion in the Radiant branches that `COIN_KIND == COIN_KIND_RADIANT` before writing to the new context fields, to catch any accidental un-gated writes that would corrupt the `bitcoin_cash` variant:
+One assertion at the entry point of the new hashOutputHashes finalization function. Not sprawled per-write — that adds style drift from upstream `lib-app-bitcoin` without load-bearing safety value (CI SHA256 diff of `bitcoin_cash` is the real regression control).
 
 ```c
-// Pattern at every Radiant-specific write:
-if (COIN_KIND != COIN_KIND_RADIANT) {
-    return SW_TECHNICAL_PROBLEM;  // should never happen; belt-and-suspenders
+// At the top of the function that finalizes hashedOutputHashes:
+static int finalize_radiant_output_hashes(void) {
+    if (COIN_KIND != COIN_KIND_RADIANT) {
+        return SW_TECHNICAL_PROBLEM;  // entry-point-only assertion — inline documentation
+                                      // that this function is Radiant-only, plus a safety net
+                                      // if a future refactor accidentally calls it under BCH.
+    }
+    // ... finalization logic ...
 }
 ```
 
-Small cost, large safety margin against silent regression.
+Rationale for entry-point-only: catches the worst-case scenario (function ever called outside Radiant context) without style inconsistency. Per-write assertions are redundant with the outer `if (COIN_KIND == COIN_KIND_RADIANT)` guards they'd be nested inside.
 
 ### Python oracle spec
 
@@ -284,6 +292,20 @@ Direct port of [`radiantjs sighash.js:171-237`](https://github.com/RadiantBlockc
 
 ### Implementation Phases
 
+#### Phase 1.5.0 — Pre-implementation checklist (~30 min)
+
+Before any code is written, confirm these spec details by reading the canonical sources directly. A wrong assumption here wastes downstream phases.
+
+- [ ] Confirm `totalRefs` wire format in `radiant-node/src/primitives/transaction.h:475-540` is **u32 little-endian (4 bytes)**, not a varint. One wrong line of Python hides a bug that all three validation checks could miss if vectors don't vary output count.
+- [ ] Confirm tx-version handling: radiantjs `sighash.js` does not branch on version 1 vs 2. Port should not either. Document the assumption in the oracle header.
+- [ ] Confirm the per-output summary byte-layout ordering: `nValue(8) + sha256d(scriptPubKey)(32) + totalRefs(4) + refsHash(32)` = 76 bytes, in this exact order.
+- [ ] Confirm: the final `hashOutputHashes` is `sha256d(concatenated summaries)`, double-SHA256 (per `radiantjs/lib/transaction/sighash.js:127`).
+- [ ] Confirm: the SIGHASH gate in our existing code is exact-equality `!= 0x41` (not bitmask). Triple-check the operator before Phase 1.5.3.
+
+All five checkboxes green → proceed. Any red → re-read source before coding.
+
+---
+
 #### Phase 1.5.1 — Python oracle + triple self-validation (~1 day)
 
 Per SpecFlow finding #7: validate the oracle three ways before trusting it, not just against one tx.
@@ -293,7 +315,10 @@ Per SpecFlow finding #7: validate the oracle three ways before trusting it, not 
 1. Write `scripts/radiant-preimage-oracle.py` — port from radiantjs sighash.js
 2. Write `scripts/oracle-self-validate.py` — runs the three checks below
 3. **Validation check A** — reconstruct sighash for a known mainnet-confirmed RXD tx; verify that the tx's on-chain signature validates against the oracle-computed sighash + known public key via `secp256k1.verify`. Target tx: candidates surfaced in brainstorm Open Question #2 (the source-wallet tx that funded us at `3521c21…` is a candidate).
-4. **Validation check B** — hand-compute one preimage byte-for-byte against the spec (write the expected preimage hex in a comment or fixture file). Diff against oracle output.
+4. **Validation check B** — hand-compute preimage bytes against the spec. Cover **both** shapes:
+   - **B.1**: one P2PKH-output fixture, matching the device's signing scope.
+   - **B.2**: at least one non-P2PKH-output fixture (e.g., a real mainnet RXD tx with a P2SH or OP_RETURN output). Oracle-only — device will correctly reject signing these. Rationale: closes Security H1 (triple-validation monoculture gap). All else equal, the `sha256d(scriptPubKey)` varint-length-parsing and nValue-endianness paths only get exercised against a single script length (25 bytes) if we stay P2PKH-only. A non-P2PKH fixture exercises the varying-script-length path in the oracle itself.
+   - For each fixture: write expected preimage hex in a comment or fixture file. Diff against oracle output byte-for-byte.
 5. **Validation check C** — independent-signer agreement. Use FlipperHub's existing PHP flow (`blockchain_rpc.php`), which calls `radiant-cli signrawtransaction` on the Docker `radiant-mainnet` node. Feed the same unsigned tx + prevout data through that path, get back a signed tx. Extract `(signature, pubkey)` from the signed tx's scriptSig. Verify against the oracle's computed sighash via `secp256k1.verify`.
 
    **What this proves**: our oracle's sighash matches what a real Radiant node produces signatures against.
@@ -325,7 +350,7 @@ Per SpecFlow finding #8: fill the gap between oracle existing and C implementati
    - 1-in / 1-out (sweep)
    - 1-in / 2-out (with change — matches our stuck 1 RXD test)
    - 3-in / 2-out (multi-input)
-   - 1-in / 1-out large consolidation (30+ inputs) — for APDU-boundary stress
+   - 10-in / 1-out consolidation — exercises per-output-hasher lifecycle repeatedly (init/stream/finalize/accumulate × 10). Script length is fixed-P2PKH so input count is the only variable; 10-in gives sufficient signal at lower curation cost than 30-in.
 2. For each: capture unsigned tx hex + prevout data + expected `hashOutputHashes` + expected preimage + expected sighash
 3. Write `scripts/fixtures/preimage-vectors.json` with all four
 4. Oracle test: oracle computes sighash for each vector, compare against expected
@@ -354,9 +379,10 @@ Implement the full C diff on `Zyrtnin-org/lib-app-bitcoin@radiant-v1` branch.
    - Finalize `hashOutputHashesCtx` → `segwit.cache.hashedOutputHashes` (double-SHA256) at output-stream end
 5. **`transaction.c:721-732`** — append `hashedOutputHashes` into `transactionHashFull.sha256` BEFORE `hashedOutputs` when Radiant
 6. **`hash_input_finalize_full_reset`** — clear all new state fields; audit UI cancel path calls this
-7. **Runtime assertions** — guard every Radiant-specific write with `COIN_KIND == COIN_KIND_RADIANT` check (SpecFlow #9: prevents silent `bitcoin_cash` regression)
-8. Commit to `radiant-v1` branch; CI builds both `bitcoin_cash` (regression) and `radiant` (new)
-9. Bump `Zyrtnin-org/app-radiant` submodule pin to the new commit
+7. **Runtime assertion** — ONE entry-point assertion at the top of the new finalize-hashOutputHashes function: `if (COIN_KIND != COIN_KIND_RADIANT) return SW_TECHNICAL_PROBLEM;`. Not per-write. The real regression control is the CI SHA256 diff of the `bitcoin_cash` variant
+8. **Electron-Wallet plugin pre-check** — modify `electroncash_plugins/ledger/ledger.py` (or the Radiant wallet class it touches) to validate every output's scriptPubKey is canonical-25-byte-P2PKH **before** sending the APDU sequence. If user attempts to send to a P2SH address (`3…`) or include an OP_RETURN memo, surface a clear wallet-UI error ("Radiant Ledger app v1 does not support P2SH destinations. Use a software wallet, or wait for v2.") and abort *before* any device interaction. This avoids the bad UX of "approve on device → device rejects → cryptic status code → user confused." Post-check on device stays as defense-in-depth.
+9. Commit to `radiant-v1` branch on `Zyrtnin-org/lib-app-bitcoin`; CI builds both `bitcoin_cash` (regression) and `radiant` (new) on `Zyrtnin-org/app-radiant`
+10. Bump `Zyrtnin-org/app-radiant` submodule pin to the new commit
 
 **Deliverables:**
 
@@ -382,8 +408,9 @@ Wire the oracle and the device together. Run all four golden vectors through bot
 2. Add SpecFlow-flagged shapes to vectors if not already there:
    - 1-in/1-out (sweep) — confirms vout_count=1 handling (SpecFlow #2)
    - 30-in consolidation — APDU boundary stress (SpecFlow #3)
-3. Run canceled-sign test: start a sign flow, press left button on device (reject). Then immediately retry same sign. Verify state was reset properly (SpecFlow #4, #6)
-4. Record all results in `INVESTIGATION.md`
+3. Run canceled-sign test: start a sign flow, press left button on device (reject). Then immediately retry same sign. Verify state was reset properly (SpecFlow #4, #6).
+4. **State-reset regression check**: replay the identical APDU byte sequence N=10 times in a row without restarting the app. Device output must be bit-identical across all 10 replays. If it varies, reset is broken — return to Phase 1.5.3 step 6 before proceeding. (Replaces the formerly-standalone Phase 1.5.6 "pre-fix regression guard," which Security L1 correctly identified as shadow-boxing — the old code path doesn't exist as a conditional branch, so catching it is not the failure mode we should guard against. The real regression risk is stale state between signs.)
+5. Record all results in `INVESTIGATION.md`.
 
 **Deliverables:**
 
@@ -416,29 +443,19 @@ Sign and broadcast the 1-in/2-out spend that originally failed. Unstick the 1 RX
 - Updated `INVESTIGATION.md` with the fix arc + final mainnet txid
 - Tag `v0.0.3-sighash-fix` on `Zyrtnin-org/app-radiant` at the commit used
 
-**If the mainnet test FAILS** (rejection reason still "script execution error" or new error):
+**If the mainnet test FAILS**, branch on the failure shape:
 
-1. Capture the exact `blockchain.transaction.broadcast` response — the node's rejection string often carries more detail than Electron-Wallet's generic error surface. Pull it from `/tmp/electron-radiant.log` or by manually broadcasting the signed tx hex via Electrum CLI to see the raw response.
-2. Run `compare-device-to-oracle.py` against the actual failed tx (same unsigned tx + prevout) with debug tracing enabled.
-   - **If device ↔ oracle matches but mainnet still rejects**: a second preimage discrepancy exists that neither we nor radiantjs know about. Trigger a focused brainstorm (scope: what ELSE in radiant-node's signing path differs). Do NOT retry on mainnet until that diagnosis lands.
-   - **If device ↔ oracle MISMATCHES for a tx shape Phase 1.5.4 said was fine**: the golden-vector set didn't cover the real-tx shape. Add it to vectors, iterate Phase 1.5.3 → 1.5.4 until the new shape passes the harness.
-3. Whatever the outcome, append it to `INVESTIGATION.md` — do not mainnet-retry without changing something material in the code or vectors. Protects the dev's remaining RXD dust and makes the failure arc self-documenting for Phase 3 community testers later.
+1. Capture the exact `blockchain.transaction.broadcast` response string — the node's rejection often carries more detail than Electron-Wallet's generic error surface. Pull from `/tmp/electron-radiant.log` or manually broadcast the signed tx hex via Electrum CLI to see the raw response.
+
+2. Decide failure class:
+   - **Deterministic, device ↔ oracle matches but mainnet still rejects**: a second preimage discrepancy exists beyond `hashOutputHashes` that neither we nor radiantjs know about. Trigger a focused mini-brainstorm (scope: what ELSE in radiant-node's signing path differs). Do NOT retry mainnet until diagnosis lands.
+   - **Deterministic, device ↔ oracle MISMATCHES for a tx shape Phase 1.5.4 said was fine**: the golden-vector set didn't cover the real-tx shape. Add the shape to vectors, iterate Phase 1.5.3 → 1.5.4 until the harness passes.
+   - **Intermittent — signs and confirms N-of-M times**: this is the nightmare state-reset class. Stop mainnet immediately. Drop to device-isolated replay: send the identical APDU sequence N≥10 times, compare device outputs bit-for-bit. If device output varies across replays, state reset is broken — return to Phase 1.5.3 step 6 before any further mainnet activity. If device output is identical but mainnet acceptance varies, the problem is host-side (Electron-Wallet APDU chunking) and is out of scope for this plan — document and escalate.
+   - **`v0.0.3-sighash-fix` tag discipline**: do NOT tag until a full 10-for-10 deterministic green replay is logged. No mainnet-retry without changing something material in code or vectors.
+
+3. Whatever the outcome, append it to `INVESTIGATION.md`. Protects remaining RXD dust and makes the failure arc self-documenting for Phase 3 community testers later.
 
 ---
-
-#### Phase 1.5.6 — Pre-fix regression guard (~0.25 day)
-
-SpecFlow finding #11: prevent accidental dual-mode signing (device producing both old-format and new-format sigs depending on which code path gets hit).
-
-**Tasks:**
-
-1. Add a test case to the compare harness: feed the device a carefully-crafted APDU sequence that could theoretically trigger the "old code path" (e.g., any path where `COIN_KIND == COIN_KIND_RADIANT` check is missing). Verify the device always produces the new format, never the old.
-2. If any path produces an old-format signature, it's a bug — fix before ship.
-
-**Deliverables:**
-
-- Regression test committed to `scripts/`
-- Documented "device only produces the Radiant preimage" in acceptance criteria
 
 ---
 
@@ -462,7 +479,7 @@ SpecFlow finding #11: prevent accidental dual-mode signing (device producing bot
 - [ ] Device signs a 1-in/1-out Radiant tx (sweep); signature validates locally against oracle sighash via `secp256k1.verify`
 - [ ] Device signs a 1-in/2-out Radiant tx (with change); validates
 - [ ] Device signs a 3-in/2-out Radiant tx (multi-input); validates
-- [ ] Device signs a 30-in/1-out Radiant tx (consolidation-scale); validates — stresses APDU boundary handling
+- [ ] Device signs a 10-in/1-out Radiant tx (consolidation-scale); validates — stresses per-output-hasher lifecycle over multiple iterations
 - [ ] Device rejects any non-canonical-P2PKH output with `SW_INCORRECT_DATA`; rejection surfaces to user cleanly
 - [ ] Device rejects any output with `scriptPubKeyLen > MAX_SCRIPT_SIZE`
 - [ ] All signatures verify against `(oracle_sighash, device_pubkey)` via local secp256k1 check — this is the "bit-match" proof
@@ -474,9 +491,10 @@ SpecFlow finding #11: prevent accidental dual-mode signing (device producing bot
 
 - [ ] CI matrix green on every push: builds both `bitcoin_cash` AND `radiant` variants
 - [ ] Local↔CI artifact SHA256 byte-identical for `radiant` variant
-- [ ] RAM usage fits Nano S Plus app budget; measured in Phase 1.5.3 Task 0
+- [ ] RAM usage fits Nano S Plus app budget — **measured**, not projected — via an on-device `SP` (stack pointer) `PRINTF` at output-stream entry in Phase 1.5.3 Task 0. `.map` inspection alone is not a measurement.
+- [ ] **Builder-image mirror pin** — `docker save` the pinned `ledger-app-builder-lite@sha256:b82bfff7…` image tarball and archive it to a Zyrtnin-org-owned GitHub release asset on `Zyrtnin-org/app-radiant`. If ghcr.io ever removes or reassigns the digest, builds remain reproducible from the archived tarball. Release blocker for v1.0.0, not for this remediation phase — flagged here so it doesn't slip.
 - [ ] No regression to Phase 0 / Phase 1 tests already passing (path-lock defense, address derivation, P2_CASHADDR rejection, plugin wizard)
-- [ ] Runtime `COIN_KIND == COIN_KIND_RADIANT` assertions present at every Radiant-specific write (SpecFlow #5/#9)
+- [ ] One entry-point `COIN_KIND == COIN_KIND_RADIANT` assertion at the top of the new `finalize_radiant_output_hashes` function. Regression control against silent BCH contamination is the CI SHA256 diff, not per-write asserts
 
 ### Quality Gates
 
@@ -526,19 +544,22 @@ Explicitly **not** a release gate:
 | Mainnet rejects again due to a SECOND preimage difference we haven't found | Very low | High (another sign-reject cycle) | Oracle self-validation against real mainnet tx *before* any device signing proves the expected sighash is what mainnet uses. If oracle → validates via real signature, we know the format is correct |
 | Radiant consensus changes hashOutputHashes format between plan-write and ship | Very low | High (signs stop working on a future block) | No mitigation proposed — Radiant hasn't had consensus changes in years; flag only |
 | Ledger firmware update breaks something between now and mainnet sign | Low | Medium | Test on same firmware version used for Phase 1 validation; record version in `INVESTIGATION.md` |
+| User spends a UTXO whose prevout scriptPubKey contains `OP_PUSHINPUTREF` bytes (e.g., dev seed has Glyph history). Radiant node may enforce sibling-input ref-binding rules we don't model | Low | Low (safe-failure: network rejects broadcast, no stuck funds) | Document in `INVESTIGATION.md`: "v1 Ledger app is not aware of Radiant ref-binding on inputs; if a spend fails and the UTXO is Glyph-touched, fall back to a software wallet." One-shot mainnet test (Security L3): sign a spend *from* a Glyph-bearing UTXO if available. If it confirms, v1 is safe even for Glyph-touched seeds |
+| Coinbase dust threshold mismatch (Radiant = 1 sat; Electron-Wallet's BCH-inherited default = 546 sat) causes user-attempted sub-546-sat outputs to be refused wallet-side even though Radiant would accept them | Medium | Low (UX, not security) | Document in `INVESTIGATION.md` as known limitation. Electron-Wallet fix is out of scope for this phase |
+| ghcr.io removes or reassigns the pinned builder digest, breaking future reproducibility | Low | Medium | Mirror-pin via `docker save` → archive as a `Zyrtnin-org/app-radiant` release asset (release criterion above) |
 
 ---
 
 ## Resource Requirements
 
 - **People**: 1 developer (C + Python); same person as Phase 1
-- **Time**: ~5.5-9.5 focused days
-  - 1 day Phase 1.5.1 oracle + triple validation
+- **Time**: ~5-9 focused days
+  - 0.5h Phase 1.5.0 pre-implementation checklist
+  - 1 day Phase 1.5.1 oracle + triple validation (with non-P2PKH fixture in Check B)
   - 0.5 day Phase 1.5.2 golden vectors
-  - 3-5 days Phase 1.5.3 C implementation (the bulk; includes the Task-0 RAM check)
-  - 1-2 days Phase 1.5.4 compare harness
+  - 3-5 days Phase 1.5.3 C implementation (the bulk; includes Task-0 on-device RAM check, plugin pre-check, cancel-path audit)
+  - 1-2 days Phase 1.5.4 compare harness + state-reset N=10 replay check
   - 0.5 day Phase 1.5.5 mainnet final test
-  - 0.25 day Phase 1.5.6 regression guard
 - **Infra**: existing (Nano S Plus, Electron-Wallet venv, GitHub Actions, Radiant mainnet node access via Electrum)
 
 ---
