@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../Pinball"
+		},
+		{
+			"path": "../FlipperChain"
+		},
+		{
+			"path": "../FlipperChain-v2"
+		}
+	],
+	"settings": {
+		"claudeCodeChat.permissions.yoloMode": false
+	}
+}

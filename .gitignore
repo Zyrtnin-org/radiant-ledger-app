@@ -1,0 +1,32 @@
+# Build artifacts
+bin/
+obj/
+build/
+dep/
+*.o
+*.elf
+*.hex
+*.a
+
+# Ledger SDK
+bolos_sdk/
+ledger_secure_sdk/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node (for Task 0.1 cross-check script)
+node_modules/
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

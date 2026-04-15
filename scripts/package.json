@@ -1,0 +1,13 @@
+{
+  "name": "radiant-ledger-app-scripts",
+  "private": true,
+  "description": "Helper scripts for Phase 0 Task 0.1 (derivation cross-check)",
+  "scripts": {
+    "task-0.1": "node task-0.1-derivation-crosscheck.js"
+  },
+  "dependencies": {
+    "bip32": "^4.0.0",
+    "bip39": "^3.1.0",
+    "tiny-secp256k1": "^2.2.3"
+  }
+}
