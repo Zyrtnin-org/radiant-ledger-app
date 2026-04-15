@@ -296,11 +296,11 @@ Direct port of [`radiantjs sighash.js:171-237`](https://github.com/RadiantBlockc
 
 Before any code is written, confirm these spec details by reading the canonical sources directly. A wrong assumption here wastes downstream phases.
 
-- [ ] Confirm `totalRefs` wire format in `radiant-node/src/primitives/transaction.h:475-540` is **u32 little-endian (4 bytes)**, not a varint. One wrong line of Python hides a bug that all three validation checks could miss if vectors don't vary output count.
-- [ ] Confirm tx-version handling: radiantjs `sighash.js` does not branch on version 1 vs 2. Port should not either. Document the assumption in the oracle header.
-- [ ] Confirm the per-output summary byte-layout ordering: `nValue(8) + sha256d(scriptPubKey)(32) + totalRefs(4) + refsHash(32)` = 76 bytes, in this exact order.
-- [ ] Confirm: the final `hashOutputHashes` is `sha256d(concatenated summaries)`, double-SHA256 (per `radiantjs/lib/transaction/sighash.js:127`).
-- [ ] Confirm: the SIGHASH gate in our existing code is exact-equality `!= 0x41` (not bitmask). Triple-check the operator before Phase 1.5.3.
+- [x] Confirm `totalRefs` wire format in `radiant-node/src/primitives/transaction.h:475-540` is **u32 little-endian (4 bytes)**, not a varint. One wrong line of Python hides a bug that all three validation checks could miss if vectors don't vary output count. ✅ Verified: `uint32_t totalRefs`, u32 LE via CHashWriter + `writer.writeUInt32LE`
+- [x] Confirm tx-version handling: radiantjs `sighash.js` does not branch on version 1 vs 2. Port should not either. Document the assumption in the oracle header. ✅ Verified: both radiantjs and radiant-node emit `transaction.version` directly, no version-dependent branching
+- [x] Confirm the per-output summary byte-layout ordering: `nValue(8) + sha256d(scriptPubKey)(32) + totalRefs(4) + refsHash(32)` = 76 bytes, in this exact order. ✅ Verified: two-source agreement between `radiant-node/src/primitives/transaction.h:489-492` and `radiantjs sighash.js:99-123`
+- [x] Confirm: the final `hashOutputHashes` is `sha256d(concatenated summaries)`, double-SHA256 (per `radiantjs/lib/transaction/sighash.js:127`). ✅ Verified: `Hash.sha256sha256(buf)` in radiantjs, `CHashWriter.GetHash()` (double by convention) in radiant-node
+- [x] Confirm: the SIGHASH gate in our existing code is exact-equality `!= 0x41` (not bitmask). Triple-check the operator before Phase 1.5.3. ✅ Verified: `lib-app-bitcoin/handler/hash_sign.c:127` uses `!= (SIGHASH_ALL | SIGHASH_FORKID)` — exact-equality rejection
 
 All five checkboxes green → proceed. Any red → re-read source before coding.
 

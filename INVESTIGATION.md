@@ -208,6 +208,22 @@ User's 1 RXD is safe at the Ledger address until the fix ships. No rush.
 
 ---
 
+## Phase 1.5.0 — Pre-implementation checklist (2026-04-15)
+
+All 5 spec checks verified against canonical sources before any oracle / C code is written.
+
+| # | Check | Source | Finding |
+|---|---|---|---|
+| 1 | `totalRefs` wire format | [`radiant-node/src/primitives/transaction.h:485`](https://github.com/RadiantBlockchain/radiant-node/blob/master/src/primitives/transaction.h#L485) `uint32_t totalRefs` + [`radiantjs sighash.js:108`](https://github.com/RadiantBlockchain/radiantjs/blob/master/lib/transaction/sighash.js#L108) `writer.writeUInt32LE(pushRefs.size)` | **u32 LE, 4 bytes.** NOT a varint. |
+| 2 | Tx-version branching | [`radiantjs sighash.js:200`](https://github.com/RadiantBlockchain/radiantjs/blob/master/lib/transaction/sighash.js#L200) `writer.writeInt32LE(transaction.version)` + [`radiant-node interpreter.cpp:2637`](https://github.com/RadiantBlockchain/radiant-node/blob/master/src/script/interpreter.cpp#L2637) `ss << txTo.nVersion` | **No version-dependent branching** in the preimage. Oracle and device both emit whatever version came in. |
+| 3 | Per-output summary byte layout | [`radiant-node/src/primitives/transaction.h:489-492`](https://github.com/RadiantBlockchain/radiant-node/blob/master/src/primitives/transaction.h#L489) + [`radiantjs sighash.js:99-123`](https://github.com/RadiantBlockchain/radiantjs/blob/master/lib/transaction/sighash.js#L99) — two-source agreement | **76 bytes, order: `nValue(8 LE) + scriptPubKeyHash(32) + totalRefs(4 LE) + refsHash(32)`** |
+| 4 | Final `hashOutputHashes` is double-SHA256 | [`radiantjs sighash.js:127`](https://github.com/RadiantBlockchain/radiantjs/blob/master/lib/transaction/sighash.js#L127) `Hash.sha256sha256(buf)` + [`radiant-node transaction.h:538`](https://github.com/RadiantBlockchain/radiant-node/blob/master/src/primitives/transaction.h#L538) `CHashWriter.GetHash()` (double-SHA256 by Bitcoin convention) | **Double SHA256** |
+| 5 | SIGHASH gate in our code | [`lib-app-bitcoin/handler/hash_sign.c:127`](https://github.com/Zyrtnin-org/lib-app-bitcoin/blob/radiant-v1/handler/hash_sign.c#L127) `if (sighashType != (SIGHASH_ALL \| SIGHASH_FORKID))` | **Exact-equality `!= 0x41`**. Rejects 0x81 (ALL\|ANYONECANPAY\|FORKID), 0x42 (NONE\|FORKID), 0x43 (SINGLE\|FORKID). Already correct from Phase 1 C diff. |
+
+All 5 checks green. Proceed to Phase 1.5.1.
+
+---
+
 ## Pins recorded for reproducibility
 
 - `LedgerHQ/app-boilerplate` @ `ac10944e8bfed3d1e57af9a856dd6ab716a74a1b`
