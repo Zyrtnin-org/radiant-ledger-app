@@ -117,6 +117,24 @@ check("totalRefs == 1", summary[40:44] == u32_le(1))
 check("refsHash == sha256d(ref_a)", summary[44:76] == sha256d(ref_a))
 
 
+# ---------- Test 8: mixed opcodes — pushes + requires + singletons ----------
+print("\nTest 8: mixed opcodes — only PUSHINPUTREF/PUSHINPUTREFSINGLETON count")
+ref_p = bytes.fromhex("aa" * 32 + "00000000")
+ref_s = bytes.fromhex("bb" * 32 + "00000000")
+ref_r = bytes.fromhex("cc" * 32 + "00000000")
+ref_d = bytes.fromhex("dd" * 32 + "00000000")
+script = (bytes([OP_PUSHINPUTREF]) + ref_p
+          + bytes([OP_PUSHINPUTREFSINGLETON]) + ref_s
+          + bytes([OP_REQUIREINPUTREF]) + ref_r
+          + bytes([OP_DISALLOWPUSHINPUTREF]) + ref_d)
+push, req, dis = get_push_refs_from_script(script)
+check("2 push refs (PUSHINPUTREF + SINGLETON)", len(push) == 2)
+check("require ref present", req == [ref_r])
+check("disallow ref present", dis == [ref_d])
+n, h = compute_refs_hash(push)
+check("totalRefs == 2", n == 2)
+
+
 print()
 if fails == 0:
     print(f"{GREEN}All push-ref tests PASS.{END}")
