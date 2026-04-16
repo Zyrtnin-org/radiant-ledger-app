@@ -168,7 +168,7 @@ def main():
     out_path.write_text(signed_tx.hex() + "\n")
     print(f"\nSaved to {out_path}")
     print("Ready to broadcast. Review the tx structure above, then run:")
-    print(f"  cat /tmp/glyph_spend_signed.hex | ssh root@89.117.20.219 'xargs docker exec radiant-mainnet radiant-cli -datadir=/home/radiant/.radiant sendrawtransaction'")
+    print(f"  cat /tmp/glyph_spend_signed.hex | ssh $VPS 'xargs docker exec radiant-mainnet radiant-cli -datadir=/home/radiant/.radiant sendrawtransaction'")
 
     return 0
 

@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radiant Glyph View-Only — Ledger Demo</title>
+<style>
+  :root {
+    --bg: #0e1116; --card: #161b22; --border: #2a2f36;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --ok: #3fb950; --warn: #d29922; --err: #f85149;
+    --ft: #a371f7; --nft: #db6d28; --p2pkh: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5;
+  }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tab {
+    padding: 8px 14px; cursor: pointer; background: none; border: none; color: var(--muted);
+    font-size: 13px; font-family: inherit; border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--text); }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input, textarea {
+    width: 100%; background: #0d1117; border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; color: var(--text); font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 12px; resize: vertical;
+  }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { min-height: 90px; }
+  button {
+    background: var(--accent); color: #0e1116; border: none; border-radius: 6px;
+    padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 8px;
+  }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .output-item {
+    background: #0d1117; border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; margin-bottom: 8px;
+  }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge.p2pkh { background: rgba(63,185,80,0.15); color: var(--p2pkh); }
+  .badge.nft { background: rgba(219,109,40,0.15); color: var(--nft); }
+  .badge.ft { background: rgba(163,113,247,0.15); color: var(--ft); }
+  .badge.unknown, .badge.op_return, .badge.invalid { background: rgba(139,148,158,0.15); color: var(--muted); }
+  .kv { margin-top: 8px; font-size: 12px; font-family: ui-monospace, monospace; }
+  .kv .k { color: var(--muted); display: inline-block; min-width: 100px; }
+  .kv .v { color: var(--text); word-break: break-all; }
+  .hex { color: var(--accent); }
+  .summary {
+    background: #0d1117; border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; margin-bottom: 16px; font-size: 13px;
+  }
+  .summary-row { display: flex; justify-content: space-between; padding: 4px 0; }
+  .summary-row:not(:last-child) { border-bottom: 1px solid var(--border); }
+  .err { color: var(--err); font-size: 12px; margin-top: 8px; font-family: monospace; }
+  .status { color: var(--warn); font-size: 12px; margin-top: 8px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .footer { color: var(--muted); font-size: 11px; margin-top: 24px; text-align: center; line-height: 1.6; }
+  code { background: #0d1117; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+  .metadata-card {
+    margin-top: 10px; padding: 12px; background: #11161c; border: 1px solid var(--border); border-radius: 6px;
+    display: flex; gap: 16px; align-items: flex-start;
+  }
+  .metadata-img {
+    flex: 0 0 auto; max-width: 160px; max-height: 160px; border-radius: 4px;
+    background: #000; image-rendering: pixelated;
+  }
+  .metadata-fields { flex: 1 1 auto; min-width: 0; font-size: 12px; }
+  .metadata-fields .row { padding: 3px 0; display: flex; gap: 8px; }
+  .metadata-fields .row .label { color: var(--muted); flex: 0 0 80px; }
+  .metadata-fields .row .value { color: var(--text); word-break: break-word; }
+  .btn-small {
+    margin-top: 8px; padding: 4px 10px; font-size: 11px; margin-right: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Radiant Glyph View-Only</h1>
+  <div class="subtitle">
+    Classify Radiant scriptPubKeys as P2PKH, NFT singleton, or FT holder — the three shapes a Ledger-owned address can custody and spend.
+    Classifier template derived from 2309 FT samples across 6 tokens and 500 mainnet blocks.
+    Reference: [classifier.mjs](classifier.mjs), golden vectors: [fixtures/classifier-vectors.json](fixtures/classifier-vectors.json).
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" data-panel="hex">ScriptPubKey Hex</button>
+      <button class="tab" data-panel="tx">Tx JSON</button>
+      <button class="tab" data-panel="fetch">Fetch by TxID</button>
+      <button class="tab" data-panel="address">Address Balances</button>
+    </div>
+
+    <div id="panel-hex" class="panel active">
+      <label>Raw scriptPubKey hex</label>
+      <textarea id="hex-input" placeholder="paste a 25B P2PKH, 63B NFT, or 75B FT scriptPubKey hex"></textarea>
+      <button id="btn-hex">Classify</button>
+      <button class="secondary" id="btn-ex-ft">Load FT example</button>
+      <button class="secondary" id="btn-ex-nft">Load NFT example</button>
+      <button class="secondary" id="btn-ex-p2pkh">Load P2PKH example</button>
+    </div>
+
+    <div id="panel-tx" class="panel">
+      <label>Full tx JSON (output of <code>radiant-cli getrawtransaction &lt;txid&gt; 1</code>)</label>
+      <textarea id="tx-input" placeholder='{"txid":"...","vout":[{"n":0,"value":0.0005,"scriptPubKey":{"hex":"76a914..."}}]}'></textarea>
+      <button id="btn-tx">Classify all outputs</button>
+    </div>
+
+    <div id="panel-fetch" class="panel">
+      <label>Transaction ID</label>
+      <input id="txid-input" placeholder="262a4d95c0e9b94bba85aa5382e69de36bb31053746aff8e740c7b4170d27fd4">
+      <label style="margin-top:10px">Server endpoint</label>
+      <input id="fetch-endpoint-input" value="http://localhost:3999">
+      <div style="color:var(--muted);font-size:11px;margin-top:4px">
+        Runs <code>server.js</code> — bridges to the VPS's <code>radiant-cli getrawtransaction</code>.
+      </div>
+      <button id="btn-fetch">Fetch and classify</button>
+    </div>
+
+    <div id="panel-address" class="panel">
+      <label>Radiant address</label>
+      <input id="addr-input" placeholder="15e1pB2h4Vj9psqaFHEuPMZMf8UPc9cCTr">
+      <label style="margin-top:10px">Server endpoint</label>
+      <input id="addr-endpoint-input" value="http://localhost:3999">
+      <div style="color:var(--muted);font-size:11px;margin-top:4px">
+        Calls <code>scantxoutset</code> on the full node with <code>addr(&lt;addr&gt;)</code> + <code>raw(&lt;FT spk&gt;)</code> for each known token
+        (<span id="known-count">…</span> FTs from <code>fixtures/known-refs.json</code>).
+        One multi-descriptor scan, ~30s (full UTXO set ≈ 28M entries).
+      </div>
+      <button id="btn-addr">Scan balances</button>
+    </div>
+  </div>
+
+  <div id="results"></div>
+
+  <div class="footer">
+    Opcode semantics verified against Radiant Core source:
+    <a href="https://github.com/RadiantBlockchain/radiant-node/blob/master/src/script/script.h" target="_blank">script.h</a> +
+    <a href="https://github.com/RadiantBlockchain/radiant-node/blob/master/src/script/interpreter.cpp" target="_blank">interpreter.cpp</a>.
+    <code>OP_STATESEPARATOR</code> (0xbd) is a runtime NOP — FT conservation is consensus-enforced via
+    <code>OP_CODESCRIPTHASHVALUESUM_UTXOS/_OUTPUTS</code>. Wallet spend sig is standard P2PKH <code>&lt;sig&gt; &lt;pubkey&gt;</code>.
+    <br>15/15 golden vectors passing — run <code>node fixtures/test_classifier.mjs</code> to verify.
+  </div>
+</div>
+
+<script src="./vendor/cbor.min.js"></script>
+<script type="module">
+import { classify, buildFtSpk, refToOutpoint } from "./classifier.mjs";
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+const CID_RE = /^(Qm[1-9A-Za-z]{44,}|bafy[a-z2-7]{50,})$/;
+
+const PROTOCOL_NAMES = {
+  1: "FT", 2: "NFT", 3: "DAT", 4: "dMint", 5: "Mutable", 6: "Burn",
+  7: "Container", 8: "Encrypted", 9: "Timelock", 10: "Authority", 11: "WAVE",
+};
+
+function detectImageMime(bytes) {
+  if (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) return "image/gif";
+  if (bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp";
+  if (bytes.length >= 4 && bytes[0] === 0x3c && bytes[1] === 0x73 && bytes[2] === 0x76 && bytes[3] === 0x67) return "image/svg+xml";
+  return null;
+}
+
+function bytesToDataUrl(bytes, mime) {
+  // base64-encode
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return `data:${mime};base64,${btoa(binary)}`;
+}
+
+/**
+ * Walk a Radiant script hex and return the push at payload-index `k` (the k-th
+ * data push, ignoring non-push opcodes). Returns Uint8Array or null.
+ */
+function extractPush(scriptHex, targetIdx) {
+  const b = hexToBytes(scriptHex);
+  let i = 0, k = 0;
+  while (i < b.length) {
+    const op = b[i];
+    let n = 0;
+    if (op >= 0x01 && op <= 0x4b) { n = op; i += 1; }
+    else if (op === 0x4c) { n = b[i+1]; i += 2; }
+    else if (op === 0x4d) { n = b[i+1] | (b[i+2] << 8); i += 3; }
+    else if (op === 0x4e) { n = b[i+1] | (b[i+2] << 8) | (b[i+3] << 16) | (b[i+4] << 24); i += 5; }
+    else { i += 1; continue; }
+    const data = b.slice(i, i + n); i += n;
+    if (k === targetIdx) return data;
+    k++;
+  }
+  return null;
+}
+
+/** Extract the CBOR payload from a reveal tx's vin[0].scriptSig. The payload is
+ *  the push immediately following the 3-byte "gly" marker (0x676c79). */
+function extractGlyphCbor(scriptSigHex) {
+  const b = hexToBytes(scriptSigHex);
+  let i = 0;
+  const pushes = [];
+  while (i < b.length) {
+    const op = b[i];
+    let n = 0;
+    if (op >= 0x01 && op <= 0x4b) { n = op; i += 1; }
+    else if (op === 0x4c) { n = b[i+1]; i += 2; }
+    else if (op === 0x4d) { n = b[i+1] | (b[i+2] << 8); i += 3; }
+    else if (op === 0x4e) { n = b[i+1] | (b[i+2] << 8) | (b[i+3] << 16) | (b[i+4] << 24); i += 5; }
+    else { i += 1; continue; }
+    const data = b.slice(i, i + n); i += n;
+    pushes.push(data);
+  }
+  for (let j = 0; j < pushes.length - 1; j++) {
+    const p = pushes[j];
+    if (p.length === 3 && p[0] === 0x67 && p[1] === 0x6c && p[2] === 0x79) {
+      return pushes[j + 1];
+    }
+  }
+  throw new Error("glyph 'gly' marker not found in scriptSig");
+}
+
+async function renderMetadata(ref, container, endpoint) {
+  container.innerHTML = `<div class="status">Locating reveal tx + decoding CBOR&hellip;</div>`;
+  try {
+    const resp = await fetch(`${endpoint}/reveal/${ref}`);
+    if (!resp.ok) throw new Error(`/reveal returned ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    const ssHex = data.reveal_tx.vin[0].scriptSig.hex;
+    const cborBytes = extractGlyphCbor(ssHex);
+    if (!window.CBOR) throw new Error("CBOR library not loaded");
+    const payload = CBOR.decode(cborBytes.buffer.slice(cborBytes.byteOffset, cborBytes.byteOffset + cborBytes.byteLength));
+
+    // normalize fields
+    const name   = payload.name   || "(no name)";
+    const ticker = payload.ticker || payload.tkr || null;
+    const desc   = payload.description || payload.desc || null;
+    const loc    = payload.loc    || null;
+    const protos = Array.isArray(payload.p) ? payload.p : (payload.p != null ? [payload.p] : []);
+    const protoLabels = protos.map(p => `${p} (${PROTOCOL_NAMES[p] || "?"})`).join(", ");
+
+    // `main` can be: raw bytes, {t: mime, b: bytes}, or {main: ...} nested — normalize to bytes + mime
+    let mainBytes = null, mainMime = null;
+    const m = payload.main;
+    if (m) {
+      const toBytes = x => x instanceof Uint8Array ? x
+                          : (x && x.buffer && x.byteLength !== undefined) ? new Uint8Array(x.buffer, x.byteOffset || 0, x.byteLength)
+                          : (x instanceof ArrayBuffer) ? new Uint8Array(x)
+                          : null;
+      if (typeof m === "object" && !m.buffer && !(m instanceof ArrayBuffer) && m.b) {
+        mainBytes = toBytes(m.b);
+        mainMime  = m.t || null;
+      } else {
+        mainBytes = toBytes(m);
+      }
+    }
+
+    let imgHtml = "";
+    if (mainBytes) {
+      const mime = mainMime || detectImageMime(mainBytes) || "application/octet-stream";
+      if (mime.startsWith("image/")) {
+        imgHtml = `<img class="metadata-img" src="${bytesToDataUrl(mainBytes, mime)}" alt="${escHtml(name)}">`;
+      } else {
+        imgHtml = `<div class="metadata-img" style="padding:10px;color:var(--muted);font-size:11px">main: ${mainBytes.length}B of ${escHtml(mime)}</div>`;
+      }
+    } else if (loc) {
+      const cid = String(loc).replace(/^ipfs:\/\//, "");
+      if (CID_RE.test(cid)) {
+        imgHtml = `<img class="metadata-img" src="${escHtml(endpoint)}/ipfs/${escHtml(cid)}" alt="${escHtml(name)}" loading="lazy"
+                         onerror="this.outerHTML='<div class=&quot;metadata-img&quot; style=&quot;padding:10px;color:var(--muted);font-size:11px&quot;>IPFS fetch failed</div>'">`;
+      }
+    }
+
+    const fields = [];
+    fields.push(["name", escHtml(name)]);
+    if (ticker) fields.push(["ticker", escHtml(ticker)]);
+    if (protoLabels) fields.push(["protocol", escHtml(protoLabels)]);
+    if (desc) fields.push(["description", escHtml(desc)]);
+    if (loc) {
+      const cid = String(loc).replace(/^ipfs:\/\//, "");
+      if (CID_RE.test(cid)) {
+        fields.push(["ipfs", `<a href="${escHtml(endpoint)}/ipfs/${escHtml(cid)}" target="_blank">${escHtml(loc)}</a>`]);
+      } else {
+        fields.push(["ipfs", `<span style="color:var(--warn)">${escHtml(loc)} (invalid CID — not rendered)</span>`]);
+      }
+    }
+    const revealTxid = escHtml(data.reveal_tx.txid);
+    fields.push(["reveal tx", `<a href="https://explorer.radiantblockchain.org/tx/${revealTxid}" target="_blank">${revealTxid}</a>`]);
+    fields.push(["reveal block", escHtml(data.reveal_block_height)]);
+    fields.push(["commit block", escHtml(data.commit_block_height)]);
+    fields.push(["main size", mainBytes ? `${mainBytes.length.toLocaleString()} bytes${mainMime ? " (" + escHtml(mainMime) + ")" : ""}` : "(no main)"]);
+
+    const rowsHtml = fields.map(([k, v]) => `<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join("");
+    container.innerHTML = `
+      <div class="metadata-card">
+        ${imgHtml}
+        <div class="metadata-fields">${rowsHtml}</div>
+      </div>`;
+  } catch (e) {
+    container.innerHTML = `<div class="err">${escHtml(e.message)}</div>`;
+  }
+}
+
+// ---------- base58 / address helpers (Web Crypto for sha256) ----------
+const ALPHA = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+async function sha256(bytes) {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+}
+
+function hexToBytes(h) {
+  const b = new Uint8Array(h.length / 2);
+  for (let i = 0; i < b.length; i++) b[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
+  return b;
+}
+
+async function pkhToAddr(pkhHex) {
+  const pkh = hexToBytes(pkhHex);
+  const payload = new Uint8Array(21);
+  payload[0] = 0x00;
+  payload.set(pkh, 1);
+  const h2 = await sha256(await sha256(payload));
+  const full = new Uint8Array(25);
+  full.set(payload, 0);
+  full.set(h2.slice(0, 4), 21);
+  let n = 0n;
+  for (const b of full) n = (n << 8n) | BigInt(b);
+  let out = "";
+  while (n > 0n) { out = ALPHA[Number(n % 58n)] + out; n /= 58n; }
+  for (const b of full) { if (b === 0) out = "1" + out; else break; }
+  return out;
+}
+
+async function addrToPkh(addr) {
+  let n = 0n;
+  for (const c of addr) {
+    const i = ALPHA.indexOf(c);
+    if (i < 0) throw new Error("invalid base58 character in address");
+    n = n * 58n + BigInt(i);
+  }
+  const raw = [];
+  while (n > 0n) { raw.unshift(Number(n & 0xffn)); n >>= 8n; }
+  for (const c of addr) { if (c === "1") raw.unshift(0); else break; }
+  if (raw.length !== 25) throw new Error(`address decoded to ${raw.length} bytes, expected 25`);
+  if (raw[0] !== 0x00) throw new Error("only mainnet P2PKH addresses (leading byte 0x00) supported");
+  const payload = new Uint8Array(raw.slice(0, 21));
+  const checksum = raw.slice(21, 25);
+  const h2 = await sha256(await sha256(payload));
+  for (let i = 0; i < 4; i++) {
+    if (h2[i] !== checksum[i]) throw new Error("base58 checksum mismatch");
+  }
+  return Array.from(raw.slice(1, 21)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// ---------- rendering ----------
+async function renderOne(r, value, voutN) {
+  const el = document.createElement("div");
+  el.className = "output-item";
+  let header = `<span class="badge ${r.type}">${r.type}</span>`;
+  if (voutN !== undefined) header = `<span class="kv" style="display:inline-block;margin-right:8px"><span class="k">vout[${escHtml(voutN)}]</span></span>` + header;
+  if (value !== undefined) header += ` &nbsp; <span style="color:var(--muted);font-size:12px">${Number(value).toFixed(8)} RXD</span>`;
+  let body = `<div>${header}</div>`;
+
+  if (r.type === "p2pkh") {
+    const addr = await pkhToAddr(r.pkh);
+    body += `<div class="kv"><span class="k">address</span> <span class="v">${addr}</span></div>`;
+    body += `<div class="kv"><span class="k">pubkey hash</span> <span class="v hex">${r.pkh}</span></div>`;
+  } else if (r.type === "nft") {
+    const addr = await pkhToAddr(r.pkh);
+    const link = refToOutpoint(r.ref);
+    body += `<div class="kv"><span class="k">owner</span> <span class="v">${addr}</span></div>`;
+    body += `<div class="kv"><span class="k">singleton ref</span> <span class="v hex">${r.ref}</span></div>`;
+    body += `<div class="kv"><span class="k">mint tx</span> <span class="v"><a href="https://explorer.radiantblockchain.org/tx/${link.txid}" target="_blank">${link.txid}:${link.vout}</a></span></div>`;
+    body += `<button class="secondary btn-small" data-render-ref="${r.ref}">Render metadata</button>`;
+    body += `<div class="metadata-slot"></div>`;
+  } else if (r.type === "ft") {
+    const addr = await pkhToAddr(r.pkh);
+    const link = refToOutpoint(r.ref);
+    body += `<div class="kv"><span class="k">holder</span> <span class="v">${addr}</span></div>`;
+    body += `<div class="kv"><span class="k">token ref</span> <span class="v hex">${r.ref}</span></div>`;
+    body += `<div class="kv"><span class="k">mint tx</span> <span class="v"><a href="https://explorer.radiantblockchain.org/tx/${link.txid}" target="_blank">${link.txid}:${link.vout}</a></span></div>`;
+    if (value !== undefined) body += `<div class="kv"><span class="k">ft amount</span> <span class="v">${Math.round(value * 1e8).toLocaleString()} photons</span></div>`;
+    body += `<button class="secondary btn-small" data-render-ref="${r.ref}">Render metadata</button>`;
+    body += `<div class="metadata-slot"></div>`;
+  } else if (r.type === "op_return") {
+    body += `<div class="kv"><span class="k">op_return</span> <span class="v hex">${r.raw}</span></div>`;
+  } else if (r.type === "unknown") {
+    body += `<div class="kv"><span class="k">shape</span> <span class="v">${r.note || "unrecognized"}</span></div>`;
+    body += `<div class="kv"><span class="k">hex</span> <span class="v hex" style="font-size:11px">${r.raw || ""}</span></div>`;
+  } else if (r.type === "invalid") {
+    body += `<div class="err">${r.error}</div>`;
+  }
+  el.innerHTML = body;
+  return el;
+}
+
+function renderSummary(results) {
+  const byType = {};
+  const ftByRef = {};
+  const nftRefs = [];
+  let totalRxd = 0;
+  for (const { r, value } of results) {
+    byType[r.type] = (byType[r.type] || 0) + 1;
+    if (r.type === "p2pkh" && value !== undefined) totalRxd += Number(value);
+    if (r.type === "ft" && value !== undefined) {
+      ftByRef[r.ref] = (ftByRef[r.ref] || 0) + Number(value);
+    }
+    if (r.type === "nft") nftRefs.push(r.ref);
+  }
+  const sum = document.createElement("div");
+  sum.className = "summary";
+  let html = `<div class="summary-row"><span>Total outputs scanned</span><span>${results.length}</span></div>`;
+  for (const [k, v] of Object.entries(byType)) {
+    if (v > 0) html += `<div class="summary-row"><span class="badge ${k}">${k}</span><span>${v}</span></div>`;
+  }
+  if (totalRxd > 0) html += `<div class="summary-row"><span>Plain RXD total</span><span>${totalRxd.toFixed(8)} RXD</span></div>`;
+  for (const [ref, val] of Object.entries(ftByRef)) {
+    html += `<div class="summary-row"><span>FT <code>${ref.slice(0,16)}…</code></span><span>${Math.round(val * 1e8).toLocaleString()} photons</span></div>`;
+  }
+  sum.innerHTML = html;
+  return sum;
+}
+
+// ---------- handlers ----------
+const $ = id => document.getElementById(id);
+const out = () => $("results");
+
+async function runHex() {
+  out().innerHTML = "";
+  out().appendChild(await renderOne(classify($("hex-input").value)));
+}
+
+async function runTxJson() {
+  out().innerHTML = "";
+  let tx;
+  try { tx = JSON.parse($("tx-input").value.trim()); }
+  catch (e) { out().innerHTML = `<div class="err">JSON parse error: ${escHtml(e.message)}</div>`; return; }
+  const vouts = tx.vout || tx.outputs || [];
+  const results = [];
+  for (const v of vouts) {
+    const spk = (v.scriptPubKey && v.scriptPubKey.hex) || v.script || v.spk || "";
+    const r = classify(spk);
+    results.push({ r, value: v.value, n: v.n });
+    out().appendChild(await renderOne(r, v.value, v.n));
+  }
+  out().insertBefore(renderSummary(results), out().firstChild);
+}
+
+async function runFetch() {
+  const txid = $("txid-input").value.trim();
+  const endpoint = $("fetch-endpoint-input").value.trim().replace(/\/$/, "");
+  out().innerHTML = `<div class="status">Fetching tx ${escHtml(txid.slice(0, 12))}&hellip;</div>`;
+  try {
+    const resp = await fetch(`${endpoint}/tx/${txid}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+    const tx = await resp.json();
+    $("tx-input").value = JSON.stringify(tx, null, 2);
+    out().innerHTML = "";
+    const results = [];
+    for (const v of tx.vout || []) {
+      const spk = v.scriptPubKey && v.scriptPubKey.hex || "";
+      const r = classify(spk);
+      results.push({ r, value: v.value, n: v.n });
+      out().appendChild(await renderOne(r, v.value, v.n));
+    }
+    out().insertBefore(renderSummary(results), out().firstChild);
+  } catch (e) {
+    out().innerHTML = `<div class="err">Fetch failed: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function runAddress() {
+  const addr = $("addr-input").value.trim();
+  const endpoint = $("addr-endpoint-input").value.trim().replace(/\/$/, "");
+  out().innerHTML = `<div class="status">Scanning… (this can take ~30s on the full UTXO set)</div>`;
+  const btn = $("btn-addr");
+  btn.disabled = true;
+  try {
+    const pkh = await addrToPkh(addr);
+    const known = (await (await fetch("./fixtures/known-refs.json")).json()).tokens;
+    const descriptors = [`addr(${addr})`];
+    for (const t of known) descriptors.push(`raw(${buildFtSpk(pkh, t.ref)})`);
+
+    const resp = await fetch(`${endpoint}/scan/multi`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ descriptors }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    if (!data.success) throw new Error(`scantxoutset returned success=false: ${JSON.stringify(data)}`);
+
+    const unspents = data.unspents || [];
+    out().innerHTML = "";
+    const results = [];
+    for (const u of unspents) {
+      const r = classify(u.scriptPubKey);
+      results.push({ r, value: u.amount });
+      out().appendChild(await renderOne(r, u.amount));
+    }
+    const meta = document.createElement("div");
+    meta.className = "status";
+    meta.textContent = `Scanned ${data.searched_items.toLocaleString()} UTXOs across ${descriptors.length} descriptors — found ${unspents.length}`;
+    out().insertBefore(meta, out().firstChild);
+    out().insertBefore(renderSummary(results), out().firstChild);
+  } catch (e) {
+    out().innerHTML = `<div class="err">${escHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------- examples ----------
+const EXAMPLES = {
+  ft:    "76a91432e092994ebdf8db0861b0e9208878c4221c472188acbdd08b87c3c771b1a9f5015a4f26bfd80979ed196b5366257a6f30929646dfd943a400000000dec0e9aa76e378e4a269e69d",
+  // Ledger mainnet-proof NFT: minted to Ledger addr 1GT2rB99dRZd919Z1ZkFKZMRijDEu2D7DX,
+  // later spent by Ledger-signed tx 22d4e0e07200437791b48651125a636b994593b215152241aef7113b24b71da3.
+  nft:   "d808480623910ba219a0903afa9f10140c31c30f0529d51f860401cb79caf24ed0000000007576a914a9763e88160a63a3f03bf846268ed0fb8abd8b5588ac",
+  // Plain RXD P2PKH sample — change output from mainnet tx 72eb90d5… (1Cg55vEw…). Unrelated to the Ledger test seed.
+  p2pkh: "76a914800d0414e758f790a48ad0f2960d566ef56cd5bf88ac",
+};
+function loadExample(k) { $("hex-input").value = EXAMPLES[k]; runHex(); }
+
+// ---------- wiring ----------
+$("btn-hex").onclick = runHex;
+$("btn-tx").onclick = runTxJson;
+$("btn-fetch").onclick = runFetch;
+$("btn-addr").onclick = runAddress;
+$("btn-ex-ft").onclick = () => loadExample("ft");
+$("btn-ex-nft").onclick = () => loadExample("nft");
+$("btn-ex-p2pkh").onclick = () => loadExample("p2pkh");
+
+document.querySelectorAll(".tab").forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    $("panel-" + t.dataset.panel).classList.add("active");
+  };
+});
+
+// Click delegation for "Render metadata" buttons on each classified NFT/FT card.
+// Endpoint preference: whichever of the two fetch inputs is non-empty, else default.
+document.addEventListener("click", (ev) => {
+  const btn = ev.target.closest("[data-render-ref]");
+  if (!btn) return;
+  const ref = btn.dataset.renderRef;
+  const endpoint = (
+    $("addr-endpoint-input")?.value?.trim()
+    || $("fetch-endpoint-input")?.value?.trim()
+    || "http://localhost:3999"
+  ).replace(/\/$/, "");
+  const slot = btn.nextElementSibling; // .metadata-slot
+  btn.disabled = true;
+  renderMetadata(ref, slot, endpoint).finally(() => { btn.disabled = false; });
+});
+
+// Populate known-token count on load
+fetch("./fixtures/known-refs.json")
+  .then(r => r.json())
+  .then(j => { $("known-count").textContent = j.tokens.length; })
+  .catch(() => { $("known-count").textContent = "?"; });
+</script>
+</body>
+</html>

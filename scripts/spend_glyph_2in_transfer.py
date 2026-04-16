@@ -309,7 +309,7 @@ def main():
     Path("/tmp/glyph_transfer_signed.hex").write_text(signed_tx.hex() + "\n")
     print(f"\nSaved to /tmp/glyph_transfer_signed.hex")
     print(f"\nTo broadcast:")
-    print(f"  ssh root@89.117.20.219 'docker exec radiant-mainnet radiant-cli -datadir=/home/radiant/.radiant sendrawtransaction {signed_tx.hex()[:60]}...'")
+    print(f"  ssh $VPS 'docker exec radiant-mainnet radiant-cli -datadir=/home/radiant/.radiant sendrawtransaction {signed_tx.hex()[:60]}...'")
 
     return 0
 

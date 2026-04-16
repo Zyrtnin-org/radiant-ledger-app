@@ -1,0 +1,37 @@
+{
+  "description": "FT token refs observed in the 500-block mainnet scan (tip 420968 → 420469) by scripts/find_ft_utxo.py. Used by the UI's Address tab to scan a known-token set when enumerating balances. Not exhaustive — a wallet with its own registry would extend this list.",
+  "source": "scripts/find_ft_utxo.py --back 500",
+  "tokens": [
+    {
+      "ref": "8b87c3c771b1a9f5015a4f26bfd80979ed196b5366257a6f30929646dfd943a400000000",
+      "label": "token-8b87c3c7",
+      "utxos_in_sample": 2290,
+      "note": "Dominant FT on mainnet during scan window — likely a popular dMint token"
+    },
+    {
+      "ref": "4bbba9407337be1465de8182dd88f5fb82355dd94e6acb45b1bc5e6f826aee4c00000000",
+      "label": "token-4bbba940",
+      "utxos_in_sample": 8
+    },
+    {
+      "ref": "108aa050400b0e61c0d28c938f40d66c120f1ef1837f1344329511d5aa8e24be00000000",
+      "label": "token-108aa050",
+      "utxos_in_sample": 4
+    },
+    {
+      "ref": "a04a31c965757232c23ca3186b5803944762d5a254d8651f03caba27c2a0690200000000",
+      "label": "token-a04a31c9",
+      "utxos_in_sample": 4
+    },
+    {
+      "ref": "7ecffa75b6e14bbffc17cf070fa7ccadcb7a64d78e90280f7576a226205aaef300000000",
+      "label": "token-7ecffa75",
+      "utxos_in_sample": 2
+    },
+    {
+      "ref": "7b7d6a6c8869efcf12887fe938760c0797820b9ba459b3e3895e42853b25a3bc00000000",
+      "label": "token-7b7d6a6c",
+      "utxos_in_sample": 1
+    }
+  ]
+}

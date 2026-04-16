@@ -638,4 +638,4 @@ In `lib-app-bitcoin@radiant-v1`:
 
 ### FlipperHub (validation cross-check source)
 
-- `/home/eric/apps/Pinball/blockchain_rpc.php` — existing production-running Radiant signing for Glyph NFT minting. Mainnet-tested. Independent implementation for validation check C.
+- `Zyrtnin-org/Flipperhub` repo `blockchain_rpc.php` — existing production-running Radiant signing for Glyph NFT minting. Mainnet-tested. Independent implementation for validation check C.

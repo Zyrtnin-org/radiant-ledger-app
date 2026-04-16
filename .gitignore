@@ -26,6 +26,7 @@ package-lock.json
 .vscode/
 .idea/
 *.swp
+*.code-workspace
 
 # OS
 .DS_Store
