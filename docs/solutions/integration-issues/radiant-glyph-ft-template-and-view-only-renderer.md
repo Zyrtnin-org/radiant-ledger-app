@@ -89,7 +89,7 @@ Given a classified NFT or FT UTXO with a 36-byte ref:
 
 1. Call `/reveal/<ref>` — server finds the reveal tx (spends commit's outpoint, embeds CBOR payload in `vin[0].scriptSig`).
 2. Walk `vin[0].scriptSig` for push elements. The 3-byte push `676c79` is the **"gly" glyph-protocol marker**. The push immediately following it is the CBOR payload.
-3. Decode with the MIT-licensed [paroga/cbor-js](https://github.com/paroga/cbor-js) vendor lib (12 KB, copied from the [radiant-glyph-nft-guide demo](../../../../radiant-glyph-nft-guide/demo/)).
+3. Decode with the MIT-licensed [paroga/cbor-js](https://github.com/paroga/cbor-js) vendor lib (12 KB, copied from the [radiant-glyph-guide demo](../../../../radiant-glyph-guide/demo/)).
 4. Render `{ name, ticker, description, p (protocol array), main, loc, … }`. `main` can be raw bytes or `{t: mime, b: bytes}` — normalize both. For image types, detect MIME via magic bytes (PNG/JPEG/GIF/WebP/SVG) and emit a `data:` URL. For IPFS-only NFTs with no `main`, fall back to `https://ipfs.io/ipfs/<cid>`.
 
 Verified end-to-end on mainnet:
@@ -118,7 +118,7 @@ All under [`view-only-ui/`](../../../view-only-ui/):
 - `index.html` — single-file UI, 4 tabs (hex / tx JSON / fetch by txid / address balances), browser-side classifier, CBOR decoder, metadata renderer
 - `classifier.mjs` — pure ES module (browser + Node), source of truth for the three regex patterns
 - `server.js` — zero-dep Node proxy, five RPC routes, ssh bridge to VPS `radiant-mainnet`
-- `vendor/cbor.min.js` — MIT-licensed paroga cbor-js, copied from the radiant-glyph-nft-guide demo
+- `vendor/cbor.min.js` — MIT-licensed paroga cbor-js, copied from the radiant-glyph-guide demo
 - `fixtures/classifier-vectors.json` — 13 golden vectors with real mainnet provenance
 - `fixtures/known-refs.json` — 6 FT token refs observed in the 500-block scan
 - `fixtures/test_classifier.mjs` — Node test runner, exit 0 iff all 15 checks pass

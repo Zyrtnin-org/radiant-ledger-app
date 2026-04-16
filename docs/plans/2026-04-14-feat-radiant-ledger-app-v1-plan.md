@@ -482,7 +482,7 @@ To be updated in `Radiant-Core/Electron-Wallet`:
 - Ecosystem derivation paths (Samara, Electron, Chainbow): [How to recover a wallet in Radiant](https://radiant-community.medium.com/how-to-recover-a-wallet-in-radiant-3db3638331a5)
 - SLIP-44 registry entry for RXD: [`satoshilabs/slips slip-0044.md`](https://github.com/satoshilabs/slips/blob/master/slip-0044.md) — `512 | 0x80000200 | RXD | Radiant`
 - Existing plugin: [`Radiant-Core/Electron-Wallet/electroncash_plugins/ledger/ledger.py`](https://github.com/Radiant-Core/Electron-Wallet/blob/master/electroncash_plugins/ledger/ledger.py)
-- Glyph protocol context (for v2 planning later): [`Zyrtnin-org/radiant-glyph-nft-guide`](https://github.com/Zyrtnin-org/radiant-glyph-nft-guide)
+- Glyph protocol context (for v2 planning later): [`Zyrtnin-org/radiant-glyph-guide`](https://github.com/Zyrtnin-org/radiant-glyph-guide)
 - Reference signing implementation: [`Zyrtnin-org/Flipperhub/blockchain_rpc.php`](https://github.com/Zyrtnin-org/Flipperhub/blob/master/blockchain_rpc.php)
 
 ### Ledger Tooling

@@ -2,7 +2,7 @@
 
 We're shipping two complementary updates to the community Radiant Ledger + Glyph tooling.
 
-**radiant-glyph-nft-guide -- now covers Fungible Tokens**
+**radiant-glyph-guide -- now covers Fungible Tokens**
 
 The implementation guide that AI agents and developers use to build on the Glyph protocol now documents both NFTs *and* FTs:
 
@@ -12,7 +12,7 @@ The implementation guide that AI agents and developers use to build on the Glyph
 - **CID validation** section added after discovering a 58-char truncated CID bug in production -- one character short makes the NFT invisible on every IPFS gateway
 - V2 fee rates, infrastructure setup, proc_close exit-code fix, on-chain thumbnail generation, and more from a full day of real-world minting
 
-https://github.com/Zyrtnin-org/radiant-glyph-nft-guide
+https://github.com/Zyrtnin-org/radiant-glyph-guide
 
 **radiant-ledger-app -- Glyph View-Only Renderer**
 
