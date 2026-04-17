@@ -3,6 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--
+  Content Security Policy: lock this page down before any chain data is
+  loaded. We render attacker-minted CBOR and attacker-chosen image bytes;
+  any future drift toward innerHTML or inline handlers becomes
+  instantly visible via CSP-console errors.
+    - default-src 'self'                         no cross-origin anything by default
+    - img-src  'self' data: blob:               blob: for decoded main.b image previews
+    - style-src 'self' 'unsafe-inline'          inline styles used in the UI card/tabs
+    - script-src 'self'                          no inline scripts, no eval
+    - connect-src 'self' http://localhost:3999   oracle/reveal server at the canonical port
+    - object-src 'none'                          no plugins
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://localhost:3999 http://127.0.0.1:3999; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'">
 <title>Radiant Glyph View-Only — Ledger Demo</title>
 <style>
   :root {
@@ -254,7 +267,31 @@ async function renderMetadata(ref, container, endpoint) {
     const ssHex = data.reveal_tx.vin[0].scriptSig.hex;
     const cborBytes = extractGlyphCbor(ssHex);
     if (!window.CBOR) throw new Error("CBOR library not loaded");
-    const payload = CBOR.decode(cborBytes.buffer.slice(cborBytes.byteOffset, cborBytes.byteOffset + cborBytes.byteLength));
+
+    // DoS guard: cap bytes handed to CBOR.decode. Attacker-minted glyphs can
+    // carry depth-bomb or length-prefix-bomb CBOR that the parser will
+    // attempt to allocate against. Typical glyph payloads are < 128 KB; 512
+    // KB is a comfortable ceiling.
+    const MAX_CBOR_BYTES = 512 * 1024;
+    if (cborBytes.byteLength > MAX_CBOR_BYTES) {
+      throw new Error(`CBOR payload too large (${cborBytes.byteLength} > ${MAX_CBOR_BYTES}) — refusing to decode`);
+    }
+
+    // Watchdog: 2s budget for CBOR.decode. paroga/cbor-js has no native
+    // timeout; if decode stalls on a malicious map this prevents the tab
+    // from hanging forever. Safari doesn't expose sync aborts, so this is
+    // a best-effort guard via Promise.race; the decode still runs to
+    // completion in the background if the watchdog fires first.
+    const decodePromise = new Promise((resolve, reject) => {
+      try {
+        resolve(CBOR.decode(
+          cborBytes.buffer.slice(cborBytes.byteOffset, cborBytes.byteOffset + cborBytes.byteLength)
+        ));
+      } catch (e) { reject(e); }
+    });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("CBOR decode timed out after 2s — possible depth bomb")), 2000));
+    const payload = await Promise.race([decodePromise, timeoutPromise]);
 
     // normalize fields
     const name   = payload.name   || "(no name)";

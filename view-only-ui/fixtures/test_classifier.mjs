@@ -73,5 +73,37 @@ if (/^[0-9a-f]{64}$/.test(outpoint.txid) && outpoint.vout === 0) {
   console.log(`${RED}✗${END} refToOutpoint → unexpected ${JSON.stringify(outpoint)}`);
 }
 
+// --- XSS / MIME regression: assert index.html's SAFE_IMG_MIMES never includes
+// SVG and that detectImageMime does not emit SVG. A loosened allowlist here
+// would let attacker-minted glyphs embed <svg onload=...> and XSS viewers.
+console.log("\n--- MIME allowlist regression ---");
+const indexHtml = readFileSync(join(__dirname, "..", "index.html"), "utf8");
+{
+  const m = indexHtml.match(/SAFE_IMG_MIMES\s*=\s*new Set\(\[([^\]]+)\]/);
+  if (!m) {
+    fail++;
+    console.log(`${RED}✗${END} could not find SAFE_IMG_MIMES definition — did the name change?`);
+  } else {
+    const listed = m[1];
+    if (/image\/svg/i.test(listed)) {
+      fail++;
+      console.log(`${RED}✗${END} SAFE_IMG_MIMES contains image/svg+xml — XSS regression`);
+    } else {
+      pass++;
+      if (verbose) console.log(`${GREEN}✓${END} SAFE_IMG_MIMES excludes SVG`);
+    }
+  }
+}
+// Ensure detectImageMime never returns image/svg for an SVG byte sequence.
+{
+  if (/return\s+["']image\/svg/i.test(indexHtml)) {
+    fail++;
+    console.log(`${RED}✗${END} detectImageMime emits image/svg — XSS regression`);
+  } else {
+    pass++;
+    if (verbose) console.log(`${GREEN}✓${END} detectImageMime does not emit image/svg`);
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
