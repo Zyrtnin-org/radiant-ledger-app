@@ -1,0 +1,17 @@
+{
+  "name": "radiant-glyph-view-only-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-based classifier + metadata renderer for Radiant Glyph NFT/FT UTXOs",
+  "type": "module",
+  "scripts": {
+    "test": "node fixtures/test_classifier.mjs --verbose",
+    "start": "node server.js",
+    "serve": "python3 -m http.server 8788 --bind 127.0.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": "github:Zyrtnin-org/radiant-ledger-app"
+}

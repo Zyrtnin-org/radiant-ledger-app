@@ -50,7 +50,14 @@ const isAddr = s => /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(s);
 const isRef  = s => /^[0-9a-fA-F]{72}$/.test(s);
 
 // In-memory cache: ref_hex → { reveal_tx, commit_txid, commit_vout, blocks_scanned }
+// Cache is capped at REVEAL_CACHE_MAX entries (LRU-ish: clears when full).
 const revealCache = new Map();
+const REVEAL_CACHE_MAX = 256;
+
+// Concurrency gate: /reveal spawns up to 30 sequential RPC calls per request.
+// Without a cap, a client that opens many cards at once can OOM the Node proxy.
+let revealInFlight = 0;
+const REVEAL_MAX_IN_FLIGHT = 3;
 
 /**
  * Given a 36-byte ref (= reversed commit_txid ‖ commit_vout_LE), locate the
@@ -64,7 +71,18 @@ const revealCache = new Map();
 async function findReveal(refHex) {
   const cached = revealCache.get(refHex);
   if (cached) return cached;
+  if (revealInFlight >= REVEAL_MAX_IN_FLIGHT) {
+    throw new Error("too many concurrent reveal lookups; retry in a few seconds");
+  }
+  revealInFlight++;
+  try {
+    return await findRevealInner(refHex);
+  } finally {
+    revealInFlight--;
+  }
+}
 
+async function findRevealInner(refHex) {
   const commitTxidRev = refHex.slice(0, 64);
   const commitTxid = Buffer.from(commitTxidRev, "hex").reverse().toString("hex");
   const commitVoutHex = refHex.slice(64, 72);
@@ -193,13 +211,29 @@ http.createServer(async (req, res) => {
         return;
       }
       const https = require("node:https");
+      const MAX_BYTES = 4 * 1024 * 1024; // 4 MB cap — typical NFT thumbnails are well under this
       const upstream = `https://ipfs.io/ipfs/${cid}`;
       https.get(upstream, { timeout: 30000 }, (proxyRes) => {
+        // Force a safe Content-Type. We never echo upstream's because a malicious IPFS pin
+        // could set `text/html` and achieve code execution in the `localhost:3999` origin.
+        // The browser will sniff the bytes and display via <img> correctly regardless.
         res.writeHead(proxyRes.statusCode, {
-          "Content-Type": proxyRes.headers["content-type"] || "application/octet-stream",
+          "Content-Type": "application/octet-stream",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Security-Policy": "default-src 'none'",
           "Cache-Control": "public, max-age=86400",
         });
-        proxyRes.pipe(res);
+        let sent = 0;
+        proxyRes.on("data", chunk => {
+          sent += chunk.length;
+          if (sent > MAX_BYTES) {
+            proxyRes.destroy();
+            res.end();
+          } else {
+            res.write(chunk);
+          }
+        });
+        proxyRes.on("end", () => res.end());
       }).on("error", (e) => {
         console.error("IPFS proxy error:", e.message);
         res.statusCode = 502;

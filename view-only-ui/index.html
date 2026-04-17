@@ -176,12 +176,17 @@ const PROTOCOL_NAMES = {
   7: "Container", 8: "Encrypted", 9: "Timelock", 10: "Authority", 11: "WAVE",
 };
 
+// Allowlist of safe raster-image MIMEs. SVG is intentionally excluded —
+// SVG in a data: URL can carry <image href> external-load tags that leak
+// user IP to attacker-controlled servers, and becomes a scripting vector
+// if future code ever renders via <object> or <iframe srcdoc>.
+const SAFE_IMG_MIMES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+
 function detectImageMime(bytes) {
   if (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
   if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) return "image/gif";
   if (bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp";
-  if (bytes.length >= 4 && bytes[0] === 0x3c && bytes[1] === 0x73 && bytes[2] === 0x76 && bytes[3] === 0x67) return "image/svg+xml";
   return null;
 }
 
@@ -277,11 +282,23 @@ async function renderMetadata(ref, container, endpoint) {
 
     let imgHtml = "";
     if (mainBytes) {
-      const mime = mainMime || detectImageMime(mainBytes) || "application/octet-stream";
-      if (mime.startsWith("image/")) {
+      // Two-stage validation: (1) strict allowlist on the MIME string — either from
+      // CBOR `main.t` or from our own magic-byte sniffer. (2) Cross-check: sniffer
+      // must agree if CBOR supplied the MIME. This closes the SVG-in-data-URL and
+      // "attacker sets m.t = text/html" vectors permanently.
+      const sniffed = detectImageMime(mainBytes);
+      const declared = mainMime;
+      let mime = null;
+      if (declared && SAFE_IMG_MIMES.has(declared) && (!sniffed || sniffed === declared)) {
+        mime = declared;
+      } else if (sniffed && SAFE_IMG_MIMES.has(sniffed)) {
+        mime = sniffed;
+      }
+      if (mime) {
         imgHtml = `<img class="metadata-img" src="${bytesToDataUrl(mainBytes, mime)}" alt="${escHtml(name)}">`;
       } else {
-        imgHtml = `<div class="metadata-img" style="padding:10px;color:var(--muted);font-size:11px">main: ${mainBytes.length}B of ${escHtml(mime)}</div>`;
+        const label = declared && !SAFE_IMG_MIMES.has(declared) ? `rejected MIME ${escHtml(declared)}` : "unrecognized format";
+        imgHtml = `<div class="metadata-img" style="padding:10px;color:var(--muted);font-size:11px">main: ${mainBytes.length}B — ${label}</div>`;
       }
     } else if (loc) {
       const cid = String(loc).replace(/^ipfs:\/\//, "");
