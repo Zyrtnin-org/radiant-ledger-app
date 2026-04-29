@@ -1,0 +1,14 @@
+Radiant Ledger Hardware Wallet App
+Copyright 2026 Mudwood Labs
+
+This product includes software developed by Mudwood Labs
+(https://mudwoodlabs.com).
+
+This repository hosts planning, documentation, scripts, and the
+view-only UI for the Radiant Ledger hardware wallet app. The Ledger
+device firmware itself is maintained at:
+  https://github.com/MudwoodLabs/app-radiant
+which is an Apache-2.0 fork of LedgerHQ/app-bitcoin.
+
+Vendored third-party files retain their original licenses:
+  - view-only-ui/vendor/cbor.min.js (MIT)

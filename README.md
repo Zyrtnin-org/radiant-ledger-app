@@ -1,6 +1,6 @@
 # Radiant Ledger App — Planning & Verification
 
-Docs, brainstorm, plan, Python oracle, golden-vector fixtures, and investigation notes for the community [**Radiant Ledger Nano S Plus app**](https://github.com/Zyrtnin-org/app-radiant).
+Docs, brainstorm, plan, Python oracle, golden-vector fixtures, and investigation notes for the community [**Radiant Ledger Nano S Plus app**](https://github.com/MudwoodLabs/app-radiant).
 
 The code lives in separate repos (see below). This repo is the paper trail — how it was designed, how its correctness was verified before touching mainnet, and the full arc of what went right and what went wrong.
 
@@ -16,9 +16,9 @@ Live deliverables:
 
 | Repo | What's there | Branch / Tag |
 |---|---|---|
-| [`Zyrtnin-org/app-radiant`](https://github.com/Zyrtnin-org/app-radiant) | Main Ledger app — fork of LedgerHQ/app-bitcoin with a `radiant` Makefile variant | `v0.0.3-sighash-fix` |
-| [`Zyrtnin-org/lib-app-bitcoin`](https://github.com/Zyrtnin-org/lib-app-bitcoin) | Submodule with the on-device C diff (`hashOutputHashes` computation, strict path-lock, canonical-P2PKH enforcement) | `radiant-v1` |
-| [`Zyrtnin-org/Electron-Wallet`](https://github.com/Zyrtnin-org/Electron-Wallet) | Host-side wallet plugin — patched derivation path + non-P2PKH pre-check + device-ID fix | `radiant-ledger-512` |
+| [`MudwoodLabs/app-radiant`](https://github.com/MudwoodLabs/app-radiant) | Main Ledger app — fork of LedgerHQ/app-bitcoin with a `radiant` Makefile variant | `v0.0.3-sighash-fix` |
+| [`MudwoodLabs/lib-app-bitcoin`](https://github.com/MudwoodLabs/lib-app-bitcoin) | Submodule with the on-device C diff (`hashOutputHashes` computation, strict path-lock, canonical-P2PKH enforcement) | `radiant-v1` |
+| [`MudwoodLabs/Electron-Wallet`](https://github.com/MudwoodLabs/Electron-Wallet) | Host-side wallet plugin — patched derivation path + non-P2PKH pre-check + device-ID fix | `radiant-ledger-512` |
 | **This repo** | Planning artifacts, verification tools, view-only Glyph renderer | `main` |
 
 ---
@@ -118,7 +118,7 @@ Full write-up: [`docs/solutions/integration-issues/radiant-glyph-ft-template-and
 
 ## Verifying a device build on your own hardware
 
-See the main app's [`BUILDER.md`](https://github.com/Zyrtnin-org/app-radiant/blob/main/BUILDER.md) for reproducibility, or the `scripts/task-0.0-runbook.md` for the Phase 0.0 sideload-test procedure.
+See the main app's [`BUILDER.md`](https://github.com/MudwoodLabs/app-radiant/blob/main/BUILDER.md) for reproducibility, or the `scripts/task-0.0-runbook.md` for the Phase 0.0 sideload-test procedure.
 
 ---
 
@@ -157,10 +157,14 @@ See [v1 plan Future Considerations](docs/plans/2026-04-14-feat-radiant-ledger-ap
 
 ## Looking for testers
 
-Have a Nano S Plus and some spare RXD? Open an issue here (or in the [`app-radiant` repo](https://github.com/Zyrtnin-org/app-radiant)) to help validate across firmware versions and tx shapes before v1.0 release.
+Have a Nano S Plus and some spare RXD? Open an issue here (or in the [`app-radiant` repo](https://github.com/MudwoodLabs/app-radiant)) to help validate across firmware versions and tx shapes before v1.0 release.
 
 ---
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Referenced upstream projects (`app-bitcoin`, `radiantjs`, `radiant-node`) retain their own licenses.
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Copyright 2026 [Mudwood Labs](https://mudwoodlabs.com).
+
+Vendored third-party files (e.g. `view-only-ui/vendor/cbor.min.js`) retain their original licenses (MIT in that case). Referenced upstream projects (`app-bitcoin`, `radiantjs`, `radiant-node`) retain their own licenses too.
