@@ -1,0 +1,67 @@
+# Dependabot configuration for radiant-ledger-app.
+# Weekly updates for npm (scripts + view-only-ui) and GitHub Actions.
+
+version: 2
+
+updates:
+  # scripts/ npm dependencies (bip32, bip39, tiny-secp256k1)
+  - package-ecosystem: "npm"
+    directory: "/scripts"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "Zyrtnin"
+    assignees:
+      - "Zyrtnin"
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: "scope"
+
+  # view-only-ui/ npm package
+  - package-ecosystem: "npm"
+    directory: "/view-only-ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "Zyrtnin"
+    assignees:
+      - "Zyrtnin"
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: "scope"
+
+  # GitHub Actions used in workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "Zyrtnin"
+    assignees:
+      - "Zyrtnin"
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
