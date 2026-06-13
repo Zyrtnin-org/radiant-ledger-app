@@ -6,7 +6,7 @@
     "task-0.1": "node task-0.1-derivation-crosscheck.js"
   },
   "dependencies": {
-    "bip32": "^4.0.0",
+    "bip32": "^5.0.1",
     "bip39": "^3.1.0",
     "tiny-secp256k1": "^2.2.3"
   }
